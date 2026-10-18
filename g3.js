@@ -56,12 +56,33 @@ const rest = [...Array(S.n).keys()].filter((k) => k !== S.loser)
 return [...rest, S.loser];
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
+// 스시고 느낌 카드: 위쪽 색면에 음식 캐릭터, 아래 회색 띠에 이름과 수치
+const ART = {
+"치킨": "🍗", "삼겹살": "🥓", "잔치국수": "🍜", "갈비찜": "🍖", "전": "🥞", "흰쌀밥": "🍚", "미역국": "🥣", "만두": "🥟",
+"초코 케이크": "🍰", "아이스크림": "🍦", "젤리 폭탄": "🍬", "콜라": "🥤", "스트롱 사이다!": "🧃", "초코우유 원샷": "🥛",
+"딸기우유": "🍓", "포도주스": "🍇", "오렌지주스": "🍊", "보리차": "🍵", "매실차": "🫖", "물": "💧", "할아버지 몫": "🍶",
+"복부 마사지": "🤲", "트름": "😮‍💨", "화장실": "🚽", "다 같이 건배!": "🥂", "나 빼고 다 같이 건배!": "🍻", "민망한 침묵": "😶",
+"배꼽 잡고 웃는다": "🤣", "그거 좀 줘": "🫴", "산책 나가기": "🚶", "나 잠깐 안 보일게": "🙈", "어! 나도 나갈게!": "🏃",
+"할머니! 얘들 없어요!": "👵", "맥주": "🍺", "소주": "🍶", "막걸리": "🥛", "하이볼": "🥃", "와인": "🍷", "소맥": "🍻",
+"폭탄주": "💣", "원샷!": "🥃", "어묵탕": "🍢", "계란말이": "🥚", "감자튀김": "🍟", "과일 안주": "🍉", "물 한 잔": "💧",
+"해장국": "🍲", "증거 인멸": "🫣", "한 잔 받아": "🫗", "건배!": "🥂", "나 화장실 좀": "🚽", "물 좀 주세요": "🙋",
+"2차 가자!": "🎤", "오늘 내가 쏜다": "💳", "술잔 바꾸기": "🔄", "안 마신 척": "😇", "분위기 왜 이래": "😑",
+};
+const HUES = ["yellow", "lime", "pink", "red", "blue", "mint", "purple", "orange"];
+function hueOf(name) { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return HUES[h % HUES.length]; }
+const FACE = '<svg class="face" viewBox="0 0 40 20" aria-hidden="true"><circle cx="11" cy="7" r="2.6"/><circle cx="29" cy="7" r="2.6"/><path d="M16 11 q4 4 8 0" fill="none" stroke-width="2.2" stroke-linecap="round"/><ellipse class="blush" cx="5" cy="13" rx="3.4" ry="2"/><ellipse class="blush" cx="35" cy="13" rx="3.4" ry="2"/></svg>';
 function cardHTML(c, { cls = "", attrs = "", mini = false, proj = null } = {}) {
+const art = ART[c.name] || "🍽️";
 const v = c.t === "A" ? "" : `<span class="v">${c.v > 0 ? "+" : ""}${c.v}</span>`;
-const pj = proj == null ? "" : `<span class="proj ${proj >= DANGER ? "dg" : ""}">${c.t === "S" ? "마시면" : "먹으면"} 가스 ${proj}${proj >= DANGER ? " 위험!" : ""}</span>`;
-return `<button class="card ${c.t} ${mini ? "mini" : ""} ${c.fresh ? "fresh" : ""} ${cls}" ${attrs}>
-<span class="k">${KIND[c.t]}</span><span class="n">${esc(c.name)}</span>
-<span>${v}${pj}${c.desc ? `<span class="d">${esc(c.desc)}</span>` : ""}</span></button>`;
+const pj = proj == null ? "" : `<span class="proj ${proj >= DANGER ? "dg" : ""}">${c.t === "S" ? "마시면" : "먹으면"} ${proj}${proj >= DANGER ? " 위험!" : ""}</span>`;
+return `<button class="card ${c.t} hue-${hueOf(c.name)} ${mini ? "mini" : ""} ${c.fresh ? "fresh" : ""} ${cls}" ${attrs}>
+<span class="field"><span class="k">${KIND[c.t]}</span><span class="tiny" aria-hidden="true">${art}</span>
+<span class="char" aria-hidden="true"><span class="emo">${art}</span>${c.t === "A" ? "" : FACE}</span><span class="plate" aria-hidden="true"></span></span>
+<span class="band">${pj}<span class="n">${esc(c.name)}</span>${v}${c.desc ? `<span class="d">${esc(c.desc)}</span>` : ""}</span></button>`;
+}
+// 카드 뒷면 (상대 손패, 잔 밑에 숨긴 카드)
+function backsHTML(n, max = 8) {
+return `<span class="backs" aria-label="카드 ${n}장">${Array.from({ length: Math.min(n, max) }, () => '<i class="back"></i>').join("")}</span>`;
 }
 function gauge(g) {
 const w = Math.min(100, (g / 20) * 100);
@@ -97,7 +118,7 @@ return `<div class="seat ${S.cur === k ? "turn" : ""} ${p.gas >= DANGER ? "dange
 ${gauge(p.gas)}
 ${histHTML(p)}
 ${dangerLine(k)}
-<div class="stats"><span>손패 ${p.hand.length}장</span></div>
+<div class="stats">${backsHTML(p.hand.length)}<span>손패 ${p.hand.length}장</span></div>
 ${bb ? `<button class="bbung-btn" data-act="timed">뿡!</button>` : ""}
 </div>`;
 }).join("");
@@ -127,7 +148,7 @@ const proj = "FDS".includes(c.t) && c.sp !== "elder" ? me.gas + c.v : null;
 return cardHTML(c, { cls, attrs, proj });
 }).join("");
 const played = S.played.length
-? `${S.playedNote ? `<div class="note">${esc(S.playedNote)}</div>` : ""}<div class="stack">${S.played.map((c) => cardHTML(c, { mini: true, attrs: 'tabindex="-1"' })).join("")}${S.stackBack && S.cur === 0 ? `<span class="muted">밑에 ${S.stackBack}장 숨김</span>` : ""}</div>${S.tell ? `<div class="tell">${esc(S.tell)}</div>` : ""}`
+? `${S.playedNote ? `<div class="note">${esc(S.playedNote)}</div>` : ""}<div class="stack">${S.played.map((c) => cardHTML(c, { mini: true, attrs: 'tabindex="-1"' })).join("")}${S.stackBack && S.cur === 0 ? `<span class="hid">${backsHTML(S.stackBack)}<span class="muted">밑에 ${S.stackBack}장 숨김</span></span>` : ""}</div>${S.tell ? `<div class="tell">${esc(S.tell)}</div>` : ""}`
 : `<div class="stack"></div><div class="muted">아직 낸 카드가 없어요.</div>`;
 const logHTML = S.log.slice(-60).map((l) => `<p class="${l.cls}">${esc(l.text)}</p>`).join("");
 const myCallers = nb(0).filter((j) => !outOfSeat(j)).map(nm).join("·");
@@ -196,6 +217,7 @@ app.innerHTML = `
 <section class="intro">
 <span class="tag">파티 카드게임 · 1등이 아니라 꼴찌를 면하는 게임</span>
 <h1>예의를 지켜라, <span class="pp">뿡!</span></h1>
+<div class="fan" aria-hidden="true">${(settings.mode === "family" ? [["F", "치킨", 3], ["D", "콜라", 3], ["A", "화장실", -5], ["F", "만두", 1], ["A", "산책 나가기", 0]] : [["S", "소주", 3], ["J", "어묵탕", -2], ["S", "폭탄주", 5], ["A", "건배!", 0], ["J", "감자튀김", 0]]).map(([t, name, v]) => cardHTML({ t, name, v, desc: "" }, { mini: true, attrs: 'tabindex="-1"' })).join("")}</div>
 <p>가스는 무조건 차오른다. 가스가 16 이상인 사람을 옆사람이 눈치채면 "뿡!" 경고 2장이면 꼴찌. 나머지는 경고가 적고 가스가 낮은 순으로 순위가 갈린다.</p>
 <div class="modes">
 <button class="mode" data-set="mode" data-val="family" aria-pressed="${settings.mode === "family"}"><b>가족판 · 할머니 생신잔치</b><small>정직한 게임. 먹고, 산책 나가고, 옆사람을 감시한다. 시작 가스 10.</small></button>

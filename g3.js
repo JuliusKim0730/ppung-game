@@ -248,7 +248,7 @@ ${settings.mode === "family" ? `<ul>
 <footer class="credit">만든이 <b>${esc(CREATOR.name)}</b> · <button class="linkbtn" data-act="contact">Contact</button></footer>
 </section>`;
 }
-const CREATOR = { name: "Julius", email: "kia1026@naver.com", site: "" };
+const CREATOR = { name: "Julius", email: "kia1026@naver.com", site: "https://juliuskim-gamedesign.vercel.app/" };
 function renderContact() {
 if (location.hash !== "#contact") history.replaceState(null, "", "#contact");
 const host = CREATOR.site.replace(/^https?:\/\//, "").replace(/\/$/, "");

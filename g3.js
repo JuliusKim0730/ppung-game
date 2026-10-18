@@ -245,6 +245,26 @@ ${settings.mode === "family" ? `<ul>
 <li>가스 16 이상은 양옆이 "뿡!" 경고 2장이면 꼴찌. 뿡을 맞으면 가스 6으로.</li>
 <li>실제 음주는 필요 없다. 물이나 음료로 즐기세요.</li></ul>`}
 </details>
+<footer class="credit">만든이 <b>${esc(CREATOR.name)}</b> · <button class="linkbtn" data-act="contact">Contact</button></footer>
+</section>`;
+}
+const CREATOR = { name: "Julius", email: "kia1026@naver.com", site: "https://juliuskim-gamedesign.vercel.app/" };
+function renderContact() {
+if (location.hash !== "#contact") history.replaceState(null, "", "#contact");
+const host = CREATOR.site.replace(/^https?:\/\//, "").replace(/\/$/, "");
+app.innerHTML = `
+<section class="contact">
+<span class="tag">만든이 · Contact</span>
+<h2>${esc(CREATOR.name)}</h2>
+<p>뿡! 카드게임을 만들었어요. 게임 소감, 버그 제보, 협업 제안 모두 반가워요.</p>
+<ul class="clinks">
+${CREATOR.site ? `<li><span class="tag">포트폴리오</span><a href="${esc(CREATOR.site)}" target="_blank" rel="noopener">${esc(host)}</a></li>` : ""}
+<li><span class="tag">메일</span><a href="mailto:${esc(CREATOR.email)}">${esc(CREATOR.email)}</a></li>
+</ul>
+<div class="gobar">
+<a class="go" href="mailto:${esc(CREATOR.email)}?subject=${encodeURIComponent("[뿡! 카드게임] 문의")}">메일 보내기</a>
+<button class="pbtn" data-act="menu">처음 화면</button>
+</div>
 </section>`;
 }
 function slidesFor(mode) {
@@ -323,7 +343,8 @@ if (act === "tutorial") { TUT = { mode: settings.mode, step: 0 }; render(); retu
 if (act === "tnext") { TUT.step++; render(); return; }
 if (act === "tprev") { TUT.step--; render(); return; }
 if (act === "tplay") { TUT = null; newGame({ tutorial: true }); render(); runGame(); return; }
-if (act === "menu" || act === "quit") { stopGame(); TUT = null; renderIntro(); return; }
+if (act === "menu" || act === "quit") { stopGame(); TUT = null; if (location.hash === "#contact") history.replaceState(null, "", location.pathname + location.search); renderIntro(); return; }
+if (act === "contact") { renderContact(); window.scrollTo(0, 0); return; }
 if (act === "speed") { const k = SPEEDS.findIndex(([v]) => v === settings.speed); settings.speed = SPEEDS[(k + 1) % SPEEDS.length][0]; saveSettings(); render(); return; }
 if (act === "explain") { settings.explain = !settings.explain; saveSettings(); render(); return; }
 const pr = UI.prompt;
@@ -363,4 +384,4 @@ window.__selftest = out;
 S = null;
 app.innerHTML = `<pre>${esc(JSON.stringify(out, null, 1))}</pre>`;
 }
-if (location.hash === "#selftest") selftest(); else render();
+if (location.hash === "#selftest") selftest(); else if (location.hash === "#contact") renderContact(); else render();

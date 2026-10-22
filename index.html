@@ -4,12 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>뿡! 카드게임</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;500;700&family=Jua&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<div class="wrap" id="app"></div>
+<div class="notice gut">꼴찌만 피하면 되는 파티 카드게임 <b>뿡!</b> <span class="xs">· 3~6인 </span>· 설치 없이 바로 플레이</div>
+<header class="site-head gut" id="head">
+<div class="in">
+<button class="logo" data-act="menu" aria-label="처음 화면"><span class="mk">뿡!</span><span class="wd">카드게임</span></button>
+<nav class="gnb" aria-label="메뉴">
+<button data-act="menu">게임하기</button>
+<button data-act="tutorial">게임 방법</button>
+<button data-act="contact">Contact</button>
+</nav>
+</div>
+</header>
+<div class="wrap gut" id="app"></div>
 <div id="modal"></div>
 <script src="g1.js"></script>
 <script src="g2.js"></script>

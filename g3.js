@@ -92,6 +92,15 @@ function histHTML(p, n = 3) {
 if (!p.hist.length) return `<div class="hist"><span>시작 ${S.def.start}</span></div>`;
 return `<div class="hist">${p.hist.slice(-n).map((h) => `<span class="${h.v > 0 ? "up" : h.v < 0 ? "dn" : ""}">${esc(h.label)} ${h.v > 0 ? "+" : ""}${h.v}</span>`).join("")}</div>`;
 }
+// 모바일 게임식 플레이어 표시: 아바타 둘레 링이 가스량, 배지가 현재 가스
+const AVATAR = { "나": "😀", "엄마": "👩", "아빠": "👨", "삼촌": "🧔", "고모": "👩‍🦰", "사촌동생": "🧒", "김부장": "👨‍💼", "이과장": "🧑‍💼", "박대리": "👩‍💼", "최주임": "🧑‍💻", "정인턴": "🧑‍🎓" };
+function avatarHTML(p, big = false) {
+const lv = p.gas >= DANGER ? "dg" : p.gas >= 13 ? "hi" : "";
+return `<div class="ava ${big ? "big" : ""} ${lv}" style="--pct:${Math.min(100, (p.gas / 20) * 100)}" aria-hidden="true"><span class="av">${AVATAR[p.name] || "🙂"}</span><span class="gasb">${p.gas}</span></div>`;
+}
+function warnsHTML(w) {
+return `<span class="warns" role="img" aria-label="경고 ${w}장">${[0, 1].map((k) => `<i class="${k < w ? "on" : ""}"></i>`).join("")}</span>`;
+}
 function dangerLine(k) {
 const p = P(k);
 if (p.gas < DANGER) return "";
@@ -100,6 +109,7 @@ const callers = nb(k).filter((j) => !outOfSeat(j)).map((j) => (j === 0 ? "나" :
 return `<div class="dz">위험! ${callers.join("·")}만 뿡 가능</div>`;
 }
 function render() {
+setPlaying(!TUT && S && !S.over && !S.selftest);
 if (TUT) return renderSlides();
 if (!S) return renderIntro();
 if (S.selftest) return;
@@ -111,14 +121,16 @@ const seatHTML = [...Array(S.n).keys()].filter((k) => k !== 0).map((k) => {
 const p = P(k);
 const pickable = pr && pr.type === "player" && pr.cands.includes(k);
 const bb = pr && pr.type === "timed" && S.bbungTarget === k;
-const side = k === 1 ? "왼쪽 옆사람" : k === S.n - 1 ? "오른쪽 옆사람" : "";
+const side = k === 1 ? "왼쪽" : k === S.n - 1 ? "오른쪽" : "";
 return `<div class="seat ${S.cur === k ? "turn" : ""} ${p.gas >= DANGER ? "danger" : ""} ${p.away ? "out" : ""} ${pickable ? "pick" : ""}" data-seat="${k}" ${pickable ? `data-player="${k}" role="button" tabindex="0"` : ""}>
-<div class="nm"><b>${esc(p.name)}</b><span>${S.cur === k ? '<span class="chip turnc">차례</span> ' : ""}${myNb.includes(k) ? `<span class="chip nb">${side || "옆사람"}</span>` : ""}${p.away ? ` <span class="chip away">${S.def.away} 중</span>` : ""}</span></div>
-<div class="nm"><span class="gasnum">${p.gas}</span><span class="warns" aria-label="경고 ${p.warn}장">${"●".repeat(p.warn)}${"○".repeat(2 - p.warn)}</span></div>
+${S.cur === k ? '<span class="ribbon">차례</span>' : ""}
+${avatarHTML(p)}
+<div class="npl"><b>${esc(p.name)}</b>${myNb.includes(k) ? `<i class="nbtag">${side ? side + " " : ""}옆</i>` : ""}</div>
 ${gauge(p.gas)}
-${histHTML(p)}
+<div class="pips">${warnsHTML(p.warn)}<span class="handc" aria-label="손패 ${p.hand.length}장"><i class="back"></i>${p.hand.length}</span></div>
+${p.away ? `<span class="status">${S.def.away} 중</span>` : ""}
 ${dangerLine(k)}
-<div class="stats">${backsHTML(p.hand.length)}<span>손패 ${p.hand.length}장</span></div>
+${histHTML(p, 2)}
 ${bb ? `<button class="bbung-btn" data-act="timed">뿡!</button>` : ""}
 </div>`;
 }).join("");
@@ -131,7 +143,7 @@ let promptHTML = "";
 if (pr) {
 if (pr.type === "card") promptHTML = `<div class="q">${esc(pr.q)}</div>${pr.optional ? `<div class="row"><button class="pbtn" data-act="skip">${esc(pr.skip)}</button></div>` : ""}`;
 else if (pr.type === "cards") promptHTML = `<div class="q">${esc(pr.q)}</div><div class="row"><button class="pbtn main" data-act="confirm">${pr.chosen.length ? `${pr.chosen.length}장 흘리고 마시기` : esc(pr.skip)}</button></div>`;
-else if (pr.type === "player") promptHTML = `<div class="q">${esc(pr.q)}</div><div class="muted">위쪽 자리에서 사람을 누르세요.</div>${pr.optional ? `<div class="row"><button class="pbtn" data-act="skip">안 한다</button></div>` : ""}`;
+else if (pr.type === "player") promptHTML = `<div class="q">${esc(pr.q)}</div><div class="muted">테이블에서 사람을 누르세요.</div>${pr.optional ? `<div class="row"><button class="pbtn" data-act="skip">안 한다</button></div>` : ""}`;
 else if (pr.type === "opts") promptHTML = `<div class="q">${esc(pr.q)}</div><div class="row">${pr.opts.map(([l, v, c], k) => `<button class="pbtn ${c || ""}" data-opt="${k}">${esc(l)}</button>`).join("")}</div>`;
 else if (pr.type === "timed") promptHTML = `<div class="q">${esc(pr.q)}</div>${pr.extra ? `<div class="tell">단서: ${esc(pr.extra)}</div>` : ""}<div class="row"><button class="pbtn main big" data-act="timed">${esc(pr.label)}</button></div><div class="timer"><i id="timerbar"></i></div>`;
 } else promptHTML = `<div class="muted">${S.cur < 0 ? "카드를 나누는 중…" : S.cur === 0 ? "처리 중…" : `${esc(nm(S.cur))}의 차례를 지켜보는 중. 옆사람이 위험해지면 뿡 버튼이 떠요.`}</div>`;
@@ -148,7 +160,7 @@ const proj = "FDS".includes(c.t) && c.sp !== "elder" ? me.gas + c.v : null;
 return cardHTML(c, { cls, attrs, proj });
 }).join("");
 const played = S.played.length
-? `${S.playedNote ? `<div class="note">${esc(S.playedNote)}</div>` : ""}<div class="stack">${S.played.map((c) => cardHTML(c, { mini: true, attrs: 'tabindex="-1"' })).join("")}${S.stackBack && S.cur === 0 ? `<span class="hid">${backsHTML(S.stackBack)}<span class="muted">밑에 ${S.stackBack}장 숨김</span></span>` : ""}</div>${S.tell ? `<div class="tell">${esc(S.tell)}</div>` : ""}`
+? `${S.playedNote ? `<div class="note">${esc(S.playedNote)}</div>` : ""}<div class="stack">${S.played.map((c) => cardHTML(c, { attrs: 'tabindex="-1"' })).join("")}${S.stackBack && S.cur === 0 ? `<span class="hid">${backsHTML(S.stackBack)}<span class="muted">밑에 ${S.stackBack}장 숨김</span></span>` : ""}</div>${S.tell ? `<div class="tell">${esc(S.tell)}</div>` : ""}`
 : `<div class="stack"></div><div class="muted">아직 낸 카드가 없어요.</div>`;
 const logHTML = S.log.slice(-60).map((l) => `<p class="${l.cls}">${esc(l.text)}</p>`).join("");
 const myCallers = nb(0).filter((j) => !outOfSeat(j)).map(nm).join("·");
@@ -157,16 +169,17 @@ const myWarn = me.gas >= DANGER
 : `<div class="mywarn">내 가스 ${me.gas}! 양옆(${myCallers})이 뿡을 외치면 경고예요.</div>`)
 : me.gas >= 13 ? `<div class="mywarn safe">가스 ${me.gas}. 16부터 위험해요. 회복 카드나 ${isFam() ? "산책" : "화장실"}을 생각해 보세요.</div>` : "";
 app.innerHTML = `
-<div class="topbar">
-<span class="title">${isFam() ? "예의를 지켜라, 뿡!" : "뿡! 회식 Edition"} <span class="tag">${esc(S.def.name)}${S.tutorial ? " · 연습 판" : ""}</span></span>
-<span class="meta"><span>턴 ${S.turn}</span><span>더미 ${S.deck.length}장</span><span>섞은 횟수 ${S.reshuffles}/2</span>
-<button class="linkbtn" data-act="speed">속도 ${(SPEEDS.find(([v]) => v === settings.speed) || [0, "테스트"])[1]}</button>
-<button class="linkbtn" data-act="explain">설명 창 ${settings.explain ? "켜짐" : "꺼짐"}</button>
-<button class="linkbtn" data-act="quit">그만하기</button></span>
+<div class="hud">
+<button class="hbtn" data-act="quit" aria-label="그만하기"><span aria-hidden="true">✕</span><span class="hl">나가기</span></button>
+<div class="hstat"><b>${isFam() ? "뿡! 가족판" : "뿡! 회식판"}${S.tutorial ? " · 연습" : ""}</b><span>턴 ${S.turn} · 더미 ${S.deck.length}장 · 섞기 ${S.reshuffles}/2</span></div>
+<div class="hright">
+<button class="hbtn" data-act="speed">속도 ${(SPEEDS.find(([v]) => v === settings.speed) || [0, "테스트"])[1]}</button>
+<button class="hbtn" data-act="explain">설명 ${settings.explain ? "켜짐" : "꺼짐"}</button>
+</div>
 </div>
 <div class="table">
-<div class="order">차례 순서: ${esc(order)} → 나</div>
-<div class="seats">${seatHTML}</div>
+<div class="order">차례 ${esc(order)} → 나</div>
+<div class="seats" style="--n:${S.n - 1}">${seatHTML}</div>
 ${zone}
 <div class="center">
 <div class="played"><span class="tag">${isFam() ? "방금 나온 카드" : "지금 잔"}</span>${played}</div>
@@ -174,15 +187,16 @@ ${zone}
 </div>
 </div>
 <div class="me ${S.cur === 0 ? "turn" : ""} ${me.gas >= DANGER ? "danger" : ""} ${me.away ? "out" : ""}" data-seat="0">
-<div class="mehead">
-<b>나</b>${S.cur === 0 ? '<span class="chip turnc">내 차례</span>' : ""}${me.away ? `<span class="chip away">${S.def.away} 중</span>` : ""}
-<span class="gasnum">${me.gas}</span><span class="tag">가스 (빨간 선 16부터 위험)</span>
+<div class="mehud">
+${avatarHTML(me, true)}
+<div class="mestat">
+<div class="nmrow"><b>나</b>${S.cur === 0 ? '<span class="ribbon in">내 차례</span>' : ""}${me.away ? `<span class="status in">${S.def.away} 중</span>` : ""}${warnsHTML(me.warn)}</div>
 ${gauge(me.gas)}
-<span class="warns" aria-label="경고 ${me.warn}장">${"●".repeat(me.warn)}${"○".repeat(2 - me.warn)}</span>
+<div class="sub"><span>가스 ${me.gas} · 빨간 선 16부터 위험</span>${histHTML(me, 4)}</div>
 </div>
-<div><span class="tag">내 가스 내역</span>${histHTML(me, 6)}</div>
+</div>
 ${myWarn}
-<div class="prompt">${promptHTML}</div>
+<div class="prompt ${pr ? "live" : ""}">${promptHTML}</div>
 <div class="hand">${handHTML}</div>
 </div>`;
 const lg = document.getElementById("log"); if (lg) lg.scrollTop = lg.scrollHeight;
@@ -210,56 +224,101 @@ ${m.lines.map(([k, v]) => `<div class="ln"><b>${esc(k)}</b><p>${esc(v)}</p></div
 const b = modalEl.querySelector("[data-close]"); if (b) b.focus();
 }
 modalEl.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) closeModal(); });
+function setPlaying(on) { document.body.classList.toggle("playing", !!on); }
+const RULES = {
+family: [
+["준비", "모두 가스 10에서 시작하고 카드 6장을 받아요. 시작 플레이어부터 시계 방향으로 돌아요."],
+["내 차례", "손에 음식이나 음료가 있으면 1장은 반드시 먹어요. 그다음 행동 카드 1장을 더 쓸 수 있고, 손패를 6장으로 채워요."],
+["위험과 뿡!", "가스가 16 이상이면 위험 상태예요. 바로 양옆 사람만 \"뿡!\"을 외칠 수 있어요. 뿡을 맞으면 경고 1장을 받고 가스는 10으로 돌아가요."],
+["못 외치면 벌칙", "위험한 사람이 있는데 아무도 안 외치면, 다음 턴이 시작될 때 양옆이 둘 다 벌칙을 받아요. 손패 1장을 무작위로 공개해서 가스를 올리는 카드면 그대로, 아니면 +1이에요."],
+["산책", "'산책 나가기'를 쓰면 다음 내 차례까지 산책 구역에 있어요. 산책 중에는 뿡을 받지도 외치지도 않아요."],
+["게임 끝", "경고 2장을 받은 사람이 꼴찌가 되고 바로 끝나요. 카드 더미를 세 번째로 다 쓰면 마감이에요. 나머지는 경고가 적은 순, 같으면 가스가 낮은 순으로 순위를 정해요."],
+],
+hoesik: [
+["준비", "모두 가스 6에서 시작하고 카드 6장을 받아요. 실제 술은 필요 없어요. 물이나 음료로 즐기세요."],
+["한 잔 내기", "내 차례엔 술 1장을 잔에 내요. 이때 손패 최대 2장을 잔 밑에 몰래 흘릴 수 있어요. 숨기지 않은 술은 그 턴에 전부 마셔요."],
+["의심!", "다른 사람은 다음 차례 전에 \"의심!\"할 수 있어요. 걸리면 숨긴 술을 전부 마시고, 헛의심이면 의심한 사람이 +3이에요."],
+["안주와 행동", "술을 마신 턴에만 안주 1장을 먹을 수 있어요. 행동 카드는 1장. 턴 끝에 2장을 뽑고, 8장을 넘으면 버려요 (술이면 마셔요)."],
+["뿡!", "가스 16 이상은 위험 상태예요. 양옆이 \"뿡!\"을 외치면 경고 1장, 가스는 6으로 돌아가요."],
+["게임 끝", "경고 2장을 받은 사람이 꼴찌예요. 나머지는 경고가 적은 순, 같으면 가스가 낮은 순으로 순위를 정해요."],
+],
+};
+const deckCount = (def) => def.cards.reduce((a, c) => a + c[3], 0);
+function boxArt(mode, small = false) {
+const fam = mode === "family";
+const cards = (fam ? [["F", "치킨", 3], ["A", "화장실", -5], ["D", "콜라", 3]] : [["S", "소주", 3], ["S", "폭탄주", 5], ["J", "어묵탕", -2]])
+.map(([t, name, v]) => cardHTML({ t, name, v, desc: "" }, { mini: true, attrs: 'tabindex="-1"' })).join("");
+return `<span class="box ${fam ? "fam" : "hoe"} ${small ? "sm" : ""}" aria-hidden="true">
+<span class="box-top"><span class="box-sub">${fam ? "할머니 생신잔치" : "회식 Edition"}</span><span class="box-title">뿡!</span><span class="box-tag">${fam ? "예의를 지켜라" : "술자리를 버텨라"}</span></span>
+${small ? "" : `<span class="box-cards">${cards}</span><span class="box-foot"><span>3~6명</span><span>10~18분</span><span>${fam ? "전연령" : "성인 · 음료로"}</span></span>`}
+</span>`;
+}
 function renderIntro() {
+setPlaying(false);
 document.documentElement.dataset.mode = settings.mode;
+const fam = settings.mode === "family";
+const def = fam ? FAMILY : HOESIK;
 const seg = (key, vals) => `<div class="seg" role="group">${vals.map(([v, l]) => `<button data-set="${key}" data-val="${v}" aria-pressed="${settings[key] == v}">${l}</button>`).join("")}</div>`;
+const ver = (m, title, desc) => `<button class="ver" data-set="mode" data-val="${m}" aria-pressed="${settings.mode === m}">${boxArt(m, true)}<span><b>${title}</b><small>${desc}</small></span></button>`;
+const about = slidesFor(settings.mode).slice(0, 3).map((s, k) => `<article class="feat"><span class="num">0${k + 1}</span><div><h3>${esc(s.t)}</h3><p>${esc(s.p)}</p></div><div class="demo">${s.d}</div></article>`).join("");
+const steps = RULES[settings.mode].map(([h, p], k) => `<li><span class="sn">${k + 1}</span><div><b>${esc(h)}</b><p>${esc(p)}</p></div></li>`).join("");
+const kinds = [...new Set(def.cards.map((c) => c[0]))];
+const gallery = kinds.map((t) => {
+const cs = def.cards.filter((c) => c[0] === t);
+return `<div class="kind"><h3>${KIND[t]} <span class="muted">${cs.length}종 · ${cs.reduce((a, c) => a + c[3], 0)}장</span></h3>
+<div class="cgrid">${cs.map(([ct, name, v, n, , desc]) => `<div class="citem">${cardHTML({ t: ct, name, v, desc: desc || "" }, { attrs: 'tabindex="-1"' })}<span class="cnt">×${n}</span></div>`).join("")}</div></div>`;
+}).join("");
 app.innerHTML = `
 <section class="intro">
-<div class="hero">
-<div>
-<span class="eyebrow">PARTY CARD GAME</span>
-<h1>예의를 지켜라, <span class="pp">뿡!</span></h1>
-<p>가스는 무조건 차오른다. 가스가 16 이상인 사람을 옆사람이 눈치채면 "뿡!" 경고 2장이면 꼴찌. 나머지는 경고가 적고 가스가 낮은 순으로 순위가 갈린다.</p>
-<div class="facts"><span>3~6인</span><span>AI 상대 싱글 플레이</span><span>1등이 아니라 꼴찌를 면하는 게임</span></div>
-</div>
-<div class="fan" aria-hidden="true">${(settings.mode === "family" ? [["F", "치킨", 3], ["D", "콜라", 3], ["A", "화장실", -5], ["F", "만두", 1], ["A", "산책 나가기", 0]] : [["S", "소주", 3], ["J", "어묵탕", -2], ["S", "폭탄주", 5], ["A", "건배!", 0], ["J", "감자튀김", 0]]).map(([t, name, v]) => cardHTML({ t, name, v, desc: "" }, { mini: true, attrs: 'tabindex="-1"' })).join("")}</div>
-</div>
-<div class="sec">
-<div class="sechead"><h2>게임 모드</h2><span class="muted">2가지 판</span></div>
-<div class="modes">
-<button class="mode" data-set="mode" data-val="family" aria-pressed="${settings.mode === "family"}"><span class="thumb fam" aria-hidden="true">🎂<span class="pick">선택됨</span></span><span class="info"><span class="badges"><i class="badge">추천</i><i class="badge ln">전연령</i></span><b>가족판 · 할머니 생신잔치</b><small>정직한 게임. 먹고, 산책 나가고, 옆사람을 감시한다.</small><span class="spec"><em>시작 가스 10</em>정직 플레이</span></span></button>
-<button class="mode" data-set="mode" data-val="hoesik" aria-pressed="${settings.mode === "hoesik"}"><span class="thumb hoe" aria-hidden="true">🍻<span class="pick">선택됨</span></span><span class="info"><span class="badges"><i class="badge dk">블러핑</i><i class="badge ln">술 대신 음료로</i></span><b>회식판 · 술자리를 버텨라</b><small>거짓말 가능. 한 잔 낸 척 잔 밑으로 술을 흘리고, 수상하면 의심한다.</small><span class="spec"><em>시작 가스 6</em>블러핑 플레이</span></span></button>
+<nav class="crumb" aria-label="위치"><span>홈</span><span>파티게임</span><span>카드게임</span></nav>
+<div class="pdp">
+<div class="gallery">
+<div class="mainimg">${boxArt(settings.mode)}</div>
+<div class="thumbs">
+<button data-set="mode" data-val="family" aria-pressed="${fam}" aria-label="가족판 보기">${boxArt("family", true)}</button>
+<button data-set="mode" data-val="hoesik" aria-pressed="${!fam}" aria-label="회식판 보기">${boxArt("hoesik", true)}</button>
 </div>
 </div>
-<div class="panel">
-<div class="opts">
-<div class="opt"><span class="tag">인원 (나 포함)</span>${seg("n", [[3, "3명"], [4, "4명"], [5, "5명"], [6, "6명"]])}</div>
-<div class="opt"><span class="tag">상대 눈치</span>${seg("level", [["easy", "둔함"], ["normal", "보통"], ["hard", "예리함"]])}</div>
-<div class="opt"><span class="tag">진행 속도</span>${seg("speed", SPEEDS)}</div>
+<div class="pinfo">
+<span class="brand">뿡! 카드게임</span>
+<h1>${fam ? "예의를 지켜라, 뿡! 가족판" : "뿡! 회식 Edition"}</h1>
+<p class="lead">${fam ? "할머니 생신잔치에서 먹고 마시다 보면 가스가 차올라요. 옆사람이 먼저 눈치채면 \"뿡!\" 1등이 아니라 꼴찌 한 명을 가리는 파티 카드게임이에요." : "잔 밑으로 술을 몰래 흘리고, 수상하면 의심하고. 블러핑으로 술자리를 버티는 파티 카드게임이에요. 실제 술 없이 음료로 즐겨요."}</p>
+<div class="price"><b>무료</b><span>설치 없이 웹에서 바로 · AI 상대</span></div>
+<dl class="spec">
+<dt>인원</dt><dd>3~6명</dd>
+<dt>플레이 시간</dt><dd>10~18분 (오프라인 기준)</dd>
+<dt>연령</dt><dd>${fam ? "전연령" : "성인 분위기 · 음료로 대체"}</dd>
+<dt>구성</dt><dd>카드 ${deckCount(def)}장 (${kinds.map((t) => KIND[t]).join(" · ")})</dd>
+</dl>
+<div class="optbox">
+<div class="ogrp"><span class="olabel">버전</span>
+<div class="vers">${ver("family", "가족판 · 할머니 생신잔치", "정직하게 먹고, 산책하고, 감시한다")}${ver("hoesik", "회식판 · 술자리를 버텨라", "흘리고, 의심하고, 들킨다")}</div></div>
+<div class="ogrp"><span class="olabel">인원 (나 포함)</span>${seg("n", [[3, "3명"], [4, "4명"], [5, "5명"], [6, "6명"]])}</div>
+<div class="ogrp two"><div><span class="olabel">상대 눈치</span>${seg("level", [["easy", "둔함"], ["normal", "보통"], ["hard", "예리함"]])}</div>
+<div><span class="olabel">진행 속도</span>${seg("speed", SPEEDS)}</div></div>
 </div>
-<div class="gobar">
-<button class="go ghost" data-act="tutorial">처음이에요 (튜토리얼)</button>
-<button class="go" data-act="start">${settings.mode === "family" ? "잔치 시작" : "회식 시작"}</button>
+<div class="cta">
+<button class="go ghost" data-jump="rules">규칙 먼저 읽기</button>
+<button class="go" data-act="start">바로 플레이</button>
+</div>
+<button class="tutlink" data-act="tutorial">처음이라면 튜토리얼로 시작하기 <span aria-hidden="true">›</span></button>
 </div>
 </div>
-<details class="rules"><summary>규칙 요약 (v1.1)</summary>
-${settings.mode === "family" ? `<ul>
-<li>내 차례: 손에 음식/음료가 있으면 1장은 반드시 먹는다. 그다음 행동 카드 1장을 더 쓸 수 있다.</li>
-<li>가스 16 이상이면 위험. 바로 양옆 사람만 "뿡!"을 외칠 수 있다. 뿡을 맞으면 경고 1장, 가스는 10으로.</li>
-<li>위험한데 아무도 안 외치면, 다음 턴이 시작될 때 양옆이 둘 다 벌칙(손패 무작위 공개, 올리는 카드면 그대로, 아니면 +1).</li>
-<li>산책 중에는 뿡을 받지도 외치지도 않는다. 다음 내 차례에 돌아온다.</li>
-<li>경고 2장이면 꼴찌, 즉시 게임 끝. 카드 더미를 세 번째로 다 쓰면 마감.</li></ul>` : `<ul>
-<li>내 차례: 술 1장을 잔에 낸다. 이때 손패 최대 2장을 잔 밑에 몰래 흘릴 수 있다. 숨기지 않은 술은 전부 마신다.</li>
-<li>다른 사람은 다음 차례 전에 "의심!"할 수 있다. 걸리면 숨긴 술을 전부 마시고, 헛의심이면 의심한 사람 +3.</li>
-<li>술을 마신 턴에만 안주 1장. 행동 카드 1장. 턴 끝에 2장을 뽑고, 8장을 넘으면 버린다 (술이면 마신다).</li>
-<li>가스 16 이상은 양옆이 "뿡!" 경고 2장이면 꼴찌. 뿡을 맞으면 가스 6으로.</li>
-<li>실제 음주는 필요 없다. 물이나 음료로 즐기세요.</li></ul>`}
-</details>
+<nav class="ptabs" aria-label="상세 메뉴">
+<button data-jump="about">게임 소개</button><button data-jump="rules">게임 규칙</button><button data-jump="cards">카드 구성</button><button data-act="contact">만든이</button>
+</nav>
+<section class="psec" id="about"><h2>게임 소개</h2>${about}</section>
+<section class="psec" id="rules"><h2>게임 규칙 <span class="muted">${fam ? "가족판" : "회식판"} · v1.1</span></h2>
+<ol class="steps">${steps}</ol>
+<div class="cta solo"><button class="go" data-act="start">${fam ? "잔치 시작" : "회식 시작"}</button><button class="go ghost" data-act="tutorial">튜토리얼로 연습하기</button></div>
+</section>
+<section class="psec" id="cards"><h2>카드 구성 <span class="muted">${fam ? "가족판" : "회식판"} · 총 ${deckCount(def)}장</span></h2>${gallery}</section>
 <footer class="credit"><span class="fl">뿡! 카드게임</span><span>만든이 <b>${esc(CREATOR.name)}</b> · <button class="linkbtn" data-act="contact">Contact</button></span><span>규칙 v1.1 · AI 상대와 브라우저에서 바로 즐기는 싱글 플레이</span></footer>
 </section>`;
 }
 const CREATOR = { name: "Julius", email: "kia1026@naver.com", site: "https://juliuskim-gamedesign.vercel.app/" };
 function renderContact() {
+setPlaying(false);
 if (location.hash !== "#contact") history.replaceState(null, "", "#contact");
 const host = CREATOR.site.replace(/^https?:\/\//, "").replace(/\/$/, "");
 app.innerHTML = `
@@ -340,12 +399,13 @@ app.innerHTML = `
 }
 function stopGame() { if (UI.prompt && UI.prompt.timer) clearTimeout(UI.prompt.timer); UI.prompt = null; UI.modal = null; renderModal(); S = null; }
 function onAct(e) {
-const t = e.target.closest("[data-act],[data-card],[data-player],[data-opt],[data-set]");
+const t = e.target.closest("[data-act],[data-card],[data-player],[data-opt],[data-set],[data-jump]");
 if (!t) return;
+if (t.dataset.jump) { const el = document.getElementById(t.dataset.jump); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
 if (t.dataset.set) {
 const k = t.dataset.set, v = t.dataset.val;
 settings[k] = k === "n" || k === "speed" ? Number(v) : v;
-saveSettings(); renderIntro(); return;
+saveSettings(); const y = window.scrollY; renderIntro(); window.scrollTo(0, y); return;
 }
 const act = t.dataset.act;
 if (act === "start" || act === "again") { stopGame(); TUT = null; newGame(); render(); runGame(); return; }

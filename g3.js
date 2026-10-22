@@ -215,22 +215,32 @@ document.documentElement.dataset.mode = settings.mode;
 const seg = (key, vals) => `<div class="seg" role="group">${vals.map(([v, l]) => `<button data-set="${key}" data-val="${v}" aria-pressed="${settings[key] == v}">${l}</button>`).join("")}</div>`;
 app.innerHTML = `
 <section class="intro">
-<span class="tag">파티 카드게임 · 1등이 아니라 꼴찌를 면하는 게임</span>
+<div class="hero">
+<div>
+<span class="eyebrow">PARTY CARD GAME</span>
 <h1>예의를 지켜라, <span class="pp">뿡!</span></h1>
-<div class="fan" aria-hidden="true">${(settings.mode === "family" ? [["F", "치킨", 3], ["D", "콜라", 3], ["A", "화장실", -5], ["F", "만두", 1], ["A", "산책 나가기", 0]] : [["S", "소주", 3], ["J", "어묵탕", -2], ["S", "폭탄주", 5], ["A", "건배!", 0], ["J", "감자튀김", 0]]).map(([t, name, v]) => cardHTML({ t, name, v, desc: "" }, { mini: true, attrs: 'tabindex="-1"' })).join("")}</div>
 <p>가스는 무조건 차오른다. 가스가 16 이상인 사람을 옆사람이 눈치채면 "뿡!" 경고 2장이면 꼴찌. 나머지는 경고가 적고 가스가 낮은 순으로 순위가 갈린다.</p>
-<div class="modes">
-<button class="mode" data-set="mode" data-val="family" aria-pressed="${settings.mode === "family"}"><b>가족판 · 할머니 생신잔치</b><small>정직한 게임. 먹고, 산책 나가고, 옆사람을 감시한다. 시작 가스 10.</small></button>
-<button class="mode" data-set="mode" data-val="hoesik" aria-pressed="${settings.mode === "hoesik"}"><b>회식판 · 술자리를 버텨라</b><small>거짓말 가능. 한 잔 낸 척 잔 밑으로 술을 흘리고, 수상하면 의심한다. 시작 가스 6.</small></button>
+<div class="facts"><span>3~6인</span><span>AI 상대 싱글 플레이</span><span>1등이 아니라 꼴찌를 면하는 게임</span></div>
 </div>
+<div class="fan" aria-hidden="true">${(settings.mode === "family" ? [["F", "치킨", 3], ["D", "콜라", 3], ["A", "화장실", -5], ["F", "만두", 1], ["A", "산책 나가기", 0]] : [["S", "소주", 3], ["J", "어묵탕", -2], ["S", "폭탄주", 5], ["A", "건배!", 0], ["J", "감자튀김", 0]]).map(([t, name, v]) => cardHTML({ t, name, v, desc: "" }, { mini: true, attrs: 'tabindex="-1"' })).join("")}</div>
+</div>
+<div class="sec">
+<div class="sechead"><h2>게임 모드</h2><span class="muted">2가지 판</span></div>
+<div class="modes">
+<button class="mode" data-set="mode" data-val="family" aria-pressed="${settings.mode === "family"}"><span class="thumb fam" aria-hidden="true">🎂<span class="pick">선택됨</span></span><span class="info"><span class="badges"><i class="badge">추천</i><i class="badge ln">전연령</i></span><b>가족판 · 할머니 생신잔치</b><small>정직한 게임. 먹고, 산책 나가고, 옆사람을 감시한다.</small><span class="spec"><em>시작 가스 10</em>정직 플레이</span></span></button>
+<button class="mode" data-set="mode" data-val="hoesik" aria-pressed="${settings.mode === "hoesik"}"><span class="thumb hoe" aria-hidden="true">🍻<span class="pick">선택됨</span></span><span class="info"><span class="badges"><i class="badge dk">블러핑</i><i class="badge ln">술 대신 음료로</i></span><b>회식판 · 술자리를 버텨라</b><small>거짓말 가능. 한 잔 낸 척 잔 밑으로 술을 흘리고, 수상하면 의심한다.</small><span class="spec"><em>시작 가스 6</em>블러핑 플레이</span></span></button>
+</div>
+</div>
+<div class="panel">
 <div class="opts">
 <div class="opt"><span class="tag">인원 (나 포함)</span>${seg("n", [[3, "3명"], [4, "4명"], [5, "5명"], [6, "6명"]])}</div>
 <div class="opt"><span class="tag">상대 눈치</span>${seg("level", [["easy", "둔함"], ["normal", "보통"], ["hard", "예리함"]])}</div>
 <div class="opt"><span class="tag">진행 속도</span>${seg("speed", SPEEDS)}</div>
 </div>
 <div class="gobar">
-<button class="go" data-act="start">${settings.mode === "family" ? "잔치 시작" : "회식 시작"}</button>
 <button class="go ghost" data-act="tutorial">처음이에요 (튜토리얼)</button>
+<button class="go" data-act="start">${settings.mode === "family" ? "잔치 시작" : "회식 시작"}</button>
+</div>
 </div>
 <details class="rules"><summary>규칙 요약 (v1.1)</summary>
 ${settings.mode === "family" ? `<ul>
@@ -245,7 +255,7 @@ ${settings.mode === "family" ? `<ul>
 <li>가스 16 이상은 양옆이 "뿡!" 경고 2장이면 꼴찌. 뿡을 맞으면 가스 6으로.</li>
 <li>실제 음주는 필요 없다. 물이나 음료로 즐기세요.</li></ul>`}
 </details>
-<footer class="credit">만든이 <b>${esc(CREATOR.name)}</b> · <button class="linkbtn" data-act="contact">Contact</button></footer>
+<footer class="credit"><span class="fl">뿡! 카드게임</span><span>만든이 <b>${esc(CREATOR.name)}</b> · <button class="linkbtn" data-act="contact">Contact</button></span><span>규칙 v1.1 · AI 상대와 브라우저에서 바로 즐기는 싱글 플레이</span></footer>
 </section>`;
 }
 const CREATOR = { name: "Julius", email: "kia1026@naver.com", site: "https://juliuskim-gamedesign.vercel.app/" };
@@ -329,7 +339,7 @@ app.innerHTML = `
 </section>`;
 }
 function stopGame() { if (UI.prompt && UI.prompt.timer) clearTimeout(UI.prompt.timer); UI.prompt = null; UI.modal = null; renderModal(); S = null; }
-app.addEventListener("click", (e) => {
+function onAct(e) {
 const t = e.target.closest("[data-act],[data-card],[data-player],[data-opt],[data-set]");
 if (!t) return;
 if (t.dataset.set) {
@@ -364,6 +374,15 @@ render(); return;
 }
 }
 if (act === "confirm" && pr.type === "cards") return answer([...pr.chosen]);
+}
+app.addEventListener("click", onAct);
+// 헤더 메뉴: 판이 진행 중이면 그만할지 묻고 나서 이동
+document.getElementById("head").addEventListener("click", (e) => {
+if (!e.target.closest("[data-act]")) return;
+if (S && !S.over && !confirm("진행 중인 판을 그만할까요?")) return;
+stopGame(); TUT = null;
+if (location.hash === "#contact") history.replaceState(null, "", location.pathname + location.search);
+onAct(e); window.scrollTo(0, 0);
 });
 app.addEventListener("keydown", (e) => {
 if ((e.key === "Enter" || e.key === " ") && e.target.dataset && e.target.dataset.player != null) { e.preventDefault(); e.target.click(); }

@@ -1,4 +1,44 @@
 "use strict";
+// AI 혼잣말: 카드를 내기 전에 말풍선으로 보여 준다. 가족판은 속내가 보이고, 회식판은 숨긴 건 절대 말하지 않는다
+const others0 = (i) => [...Array(S.n).keys()].filter((k) => k !== i && !P(k).away);
+const hiOf = (ks) => ks.reduce((a, b) => (P(b).gas > P(a).gas ? b : a));
+function famThinkFD(i, c, extra = false) {
+const nx = (i + 1) % S.n;
+if (extra) return pick(["또 먹으라고? 배 터지겠네…", "어쩔 수 없지, 한 입만 더", `${c.name}라도 먹어야지`]);
+if (c.sp === "chain") return pick([`${nm(nx)} 배가 빵빵하던데… ${c.name} 먹고 넘겨야지`, `${c.name} 맛있다! ${nm(nx)}도 먹어 봐`]);
+if (c.sp === "elder") return pick(["이건 어른 드려야지. 누구 드릴까…", "할아버지 몫은 내가 먹으면 안 되지~"]);
+if (P(i).gas >= 13) return pick(["큰일이다… 뭘 먹어도 위험한데", "배가 꾸룩꾸룩… 제일 가벼운 걸로"]);
+if (c.v <= 0) return pick(["속이 더부룩해… 가벼운 걸로", `${c.name} 정도면 괜찮겠지`]);
+return pick([`${c.name} 맛있겠다!`, `일단 ${eul(c.name)} 먹자`, "할머니가 남기지 말라고 하셨는데…"]);
+}
+function famThinkAct(i, c) {
+const os = others0(i), hi = os.length ? hiOf(os) : i;
+const nbs = nb(i).filter((k) => k !== i), nhi = nbs.length ? hiOf(nbs) : i;
+const most = os.length ? os.reduce((a, b) => (P(b).hand.length > P(a).hand.length ? b : a)) : i;
+return pick({
+heal: ["배가 꾸룩꾸룩… 지금 안 빼면 큰일 나", "슬쩍 가스 좀 빼고 와야겠다"],
+walk: ["바람 좀 쐬고 와야겠다", "여기 있다간 들킬 것 같아…"],
+toast: [`${nm(hi)} 얼굴이 빨갛네? 다 같이 건배하자!`, "할머니 생신 축하드려요~ 건배!"],
+toastx: [`${nm(hi)} 거의 다 찼다. 나만 빼고 건배!`, "난 배불러서… 다들 건배해요!"],
+silence: ["…괜히 분위기 좀 조용하게 만들어 볼까", "다들 왜 말이 없어?"],
+laugh: [`옆에서 웃기면 ${nm(nhi)} 터지겠지?`, "내가 웃긴 얘기 하나 해 줄게"],
+steal: [`${nm(most)} 손에 뭐 맛있는 거 있나?`, "그거 나 좀 줘 봐~"],
+grandma: ["다들 어디 갔어? 할머니한테 일러야지", "산책은 무슨, 다 들어와!"],
+}[c.sp] || ["이거나 써 볼까"]);
+}
+function hoeThinkCover() { return pick(["자, 한 잔 받겠습니다!", "오늘은 살살 마셔야지…", "이 정도는 괜찮아", "부장님 먼저 드시죠~", "짠! 한 잔 하고"]); }
+function hoeThinkAct(i, c) {
+const os = others0(i), hi = os.length ? hiOf(os) : i;
+return pick({
+toilet: ["잠깐 화장실 좀…", "속이 안 좋아, 잠깐만"],
+water: ["물 좀 마셔야겠다", "여기 물 좀 주세요~"],
+cheers: ["다 같이 건배 한번 하죠!", "오늘 고생 많았어요, 건배!"],
+mood: ["분위기 왜 이래, 아직 멀쩡한 사람 있네?", "누가 이렇게 멀쩡해?"],
+pour: [`${nm(hi)}, 내 잔 한 잔 받아!`, `${nm(hi)} 얼굴 빨간데? 한 잔 더!`],
+treat: [`오늘은 내가 쏜다! ${nm(hi)} 마셔!`, "내 술 받아~ 오늘 내가 산다"],
+round2: ["2차 가자! 다 같이 돌려!", "여기서 끝낼 거야? 2차!"],
+}[c.sp] || ["이거나 써 볼까"]);
+}
 async function famWalk(i) {
 P(i).away = true;
 log(`${nm(i)}: "잠깐 바람 좀 쐬고 올게." 산책 구역으로 이동`);
@@ -41,8 +81,10 @@ await sleep(500);
 async function famAction(i, c, depth = 0) {
 discard(c);
 S.stats.actions++;
-await fly(i, c, depth ? "뺏어서 썼다" : "썼다");
-if (c.sp === "heal") addGas(i, c.v, c.name);
+await fly(i, c, `'${c.name}' 카드를 ${depth ? "뺏어서 " : ""}썼다`);
+if (c.sp === "heal") { const d = addGas(i, c.v, c.name, true); effect(`${sbj(i)} '${c.name}' 카드를 썼다. 효과: 가스 ${sgn(d)} → ${P(i).gas}`, "gd"); }
+else { log(`${sbj(i)} '${c.name}' 카드를 ${depth ? "뺏어서 " : ""}썼다. 효과: ${c.desc}`); S.playedFx = c.desc; }
+if (c.sp === "heal") { /* 위에서 처리 */ }
 else if (["toast", "toastx", "silence", "laugh"].includes(c.sp)) await famGlobal(i, c);
 else if (c.sp === "walk") await famWalk(i);
 else if (c.sp === "grandma") {
@@ -55,9 +97,9 @@ if (!cands.length) return;
 const k = human(i) ? await askPlayer("누구의 카드를 뺏어 쓸까요? (무작위 1장)", cands) : cands.reduce((a, b) => (P(b).hand.length > P(a).hand.length ? b : a));
 const h = P(k).hand;
 const g = h.splice(Math.floor(rnd() * h.length), 1)[0];
-log(`${nm(k)}의 손패에서 뽑았다: ${g.name}`, "sys");
-await sleep(500);
-if (famIsFD(g)) await famPlayFD(i, g, "뺏어 먹었다");
+effect(`${nm(k)}의 손패에서 '${g.name}'${josa(g.name, "이", "가").slice(g.name.length)} 뽑혔다. ${sbj(i)} 바로 써야 한다`, "sys");
+await sleep(700);
+if (famIsFD(g)) await famPlayFD(i, g, "뺏어서 ");
 else if (["r_block", "r_join"].includes(g.sp) || depth >= 3) { discard(g); log("반응 카드라 그냥 버린다", "sys"); }
 else await famAction(i, g, depth + 1);
 }
@@ -96,14 +138,22 @@ const p = P(i);
 if (p.away) { p.away = false; log(`${sbj(i)} 산책에서 돌아왔다 (이제 다시 뿡 대상)`, "sys"); await sleep(500); }
 await missedPenalty();
 if (S.pendingExtra > 0) {
-S.pendingExtra--;
+// 치킨·삼겹살이 쌓인 만큼 이번 사람이 전부 먹는다 (다다음 사람에게 넘어가지 않게)
+const need = S.pendingExtra, src = S.extraSrc;
+S.pendingExtra = 0; S.extraFor = null;
+log(`${eunNeun(i)} ${src} 효과로 음식 ${need}장을 더 먹어야 한다. 이번 턴엔 음식·음료를 ${need + 1}장 먹는다`, "bb");
+for (let t = 0; t < need; t++) {
 const foods = p.hand.filter((c) => c.t === "F");
 if (foods.length) {
-const c = human(i) ? await askCard("치킨/삼겹살 때문에 음식 1장을 더 먹어야 해요", (c) => c.t === "F") : foods.reduce((a, b) => (b.v < a.v ? b : a));
+const c = human(i)
+? await askCard(`${src} 효과! 음식 1장을 더 먹어야 해요${need > 1 ? ` (${t + 1}/${need})` : ""}. 그다음 평소처럼 음식·음료 1장을 또 먹어요`, (c) => c.t === "F")
+: foods.reduce((a, b) => (b.v < a.v ? b : a));
+if (!human(i)) await think(i, famThinkFD(i, c, true));
 takeCard(i, c);
-await famPlayFD(i, c, "추가로 먹었다");
+await famPlayFD(i, c, "추가로 ");
 } else addGas(i, 1, "먹을 음식이 없어서");
 await check();
+}
 }
 const fd = p.hand.filter(famIsFD);
 if (!fd.length) {
@@ -115,7 +165,7 @@ if (human(i)) {
 const lowest = fd.reduce((a, b) => (b.v < a.v ? b : a));
 await coach("eat", "내 차례예요! 음식이나 음료 1장은 반드시 먹어야 해요. 카드 아래에 '먹으면 가스 몇'이 보여요. 낮은 카드를 먹는 게 안전해요.");
 c = await askCard("음식이나 음료 1장을 먹으세요 (필수)", famIsFD, { hint: S.tutorial ? lowest : null });
-} else c = famAiFD(i, fd);
+} else { c = famAiFD(i, fd); await think(i, famThinkFD(i, c)); }
 takeCard(i, c);
 await famPlayFD(i, c);
 await check();
@@ -129,7 +179,7 @@ else await coach("action", "이제 행동 카드 1장을 더 쓸 수 있어요 (
 const hint = S.tutorial ? p.hand.find((c) => famOwnTurnAction(c) && (p.gas >= 13 ? c.sp === "heal" || c.sp === "walk" : c.sp === "toastx")) : null;
 a = await askCard("행동 카드 1장을 더 쓸 수 있어요", famOwnTurnAction, { optional: true, skip: "턴 끝내기", hint });
 }
-} else a = famAiAction(i);
+} else { a = famAiAction(i); if (a) await think(i, famThinkAct(i, a)); }
 if (a) { takeCard(i, a); await famAction(i, a); await check(); }
 for (const c of p.hand) delete c.fresh;
 while (p.hand.length < S.def.hand) p.hand.push(draw());
@@ -152,10 +202,11 @@ return to;
 async function hoeDrinkFromHand(k, fallback, why) {
 const sul = P(k).hand.filter((c) => c.t === "S");
 if (!sul.length) { addGas(k, fallback, `${why}(술이 없어서)`); return; }
-const c = human(k) ? await askCard(`${why}: 마실 술 1장을 고르세요`, (c) => c.t === "S") : sul.reduce((a, b) => (b.v < a.v ? b : a));
+const c = human(k) ? await askCard(`${why} 효과! 내 손패의 술 1장을 바로 마셔야 해요`, (c) => c.t === "S") : sul.reduce((a, b) => (b.v < a.v ? b : a));
 takeCard(k, c); discard(c);
-await fly(k, c, "받아 마셨다");
-addGas(k, c.v, `${why}: ${c.name}`);
+await fly(k, c, `'${c.name}'${josa(c.name, "을", "를").slice(c.name.length)} 받아 마셨다`);
+const d = addGas(k, c.v, `${why}: ${c.name}`, true);
+effect(`${sbj(k)} 손패의 '${c.name}'${josa(c.name, "을", "를").slice(c.name.length)} 받아 마셨다. 효과: 가스 ${sgn(d)} → ${P(k).gas}`);
 }
 function tellFor(hidden) {
 const n = hidden.length;
@@ -231,7 +282,8 @@ return rest.filter((c) => c.t === "S").sort((a, b) => b.v - a.v).slice(0, 2).fil
 }
 async function hoeAction(i, c) {
 discard(c); S.stats.actions++;
-await fly(i, c, "썼다");
+await fly(i, c, `'${c.name}' 카드를 썼다`);
+log(`${sbj(i)} '${c.name}' 카드를 썼다. 효과: ${c.desc}`); S.playedFx = c.desc;
 const others = [...Array(S.n).keys()].filter((k) => k !== i && !P(k).away);
 const hiOther = () => others.reduce((a, b) => (P(b).gas > P(a).gas ? b : a));
 if (c.sp === "toilet") { addGas(i, -3, c.name); P(i).away = true; log(`${eunNeun(i)} 화장실에 갔다 (다음 차례까지 카드 대상 제외, 뿡은 받는다)`, "sys"); }
@@ -295,14 +347,15 @@ if (sul.length) {
 let cover, hidden;
 if (human(i)) {
 await coach("cover", "내 차례예요! 술 1장을 잔에 내야 해요 (앞면으로 마셔요). 가장 약한 술을 내는 게 보통이에요.");
-cover = await askCard("잔에 낼 술 1장을 고르세요 (앞면으로 마신다)", (c) => c.t === "S", { hint: S.tutorial ? sul.reduce((a, b) => (b.v < a.v ? b : a)) : null });
+cover = await askCard(`잔에 낼 술 1장을 고르세요 (앞면으로 마신다)${sul.length > 1 ? `. 남는 술 ${sul.length - 1}장은 흘리지 않으면 이번 턴에 마저 마셔요` : ""}`, (c) => c.t === "S", { hint: S.tutorial ? sul.reduce((a, b) => (b.v < a.v ? b : a)) : null });
 takeCard(i, cover);
 const rest = p.hand.filter((c) => c.t === "S");
 if (rest.length) await coach("hide", `여기가 회식판의 핵심! 손에 남은 술(${rest.map((c) => c.name).join(", ")})은 이번 턴에 전부 마셔야 해요. 대신 최대 2장을 잔 밑으로 몰래 흘릴 수 있어요. 센 술을 골라 흘려 보세요. 들키면 숨긴 술을 전부 마셔요.`);
 hidden = await askCards("잔 밑으로 몰래 흘릴 카드를 최대 2장 고르세요. 숨기지 않은 술은 이번 턴에 전부 마셔요", () => true, 2,
-{ hint: S.tutorial && rest.length ? rest.reduce((a, b) => (b.v > a.v ? b : a)) : null });
+{ hint: S.tutorial && rest.length ? rest.reduce((a, b) => (b.v > a.v ? b : a)) : null, cover });
 } else {
 cover = sul.reduce((a, b) => (b.v < a.v ? b : a));
+await think(i, hoeThinkCover());
 takeCard(i, cover);
 hidden = hoeAiHide(i, p.hand);
 }
@@ -310,34 +363,39 @@ for (const c of hidden) takeCard(i, c);
 if (hidden.length) { S.stats.hide++; S.stats.hidden += hidden.length; }
 S.stackBack = hidden.length;
 S.tell = human(i) ? "" : tellFor(hidden);
+// 흘린 카드의 흔적: 자리 밑으로 카드 모서리가 살짝 삐져나온다 (가끔은 아무것도 없는데도 보인다)
+const sliver = hidden.length ? (rnd() < 0.35 + 0.2 * hidden.length ? Math.min(hidden.length, 1 + (rnd() < 0.3 ? 1 : 0)) : 0) : rnd() < 0.12 ? 1 : 0;
+S.peek = human(i) || !sliver ? null : { i, n: sliver, seed: Math.floor(rnd() * 4) };
 discard(cover);
-await fly(i, cover, "잔에 냈다");
-addGas(i, cover.v, cover.name);
+await fly(i, cover, `'${cover.name}'${josa(cover.name, "을", "를").slice(cover.name.length)} 잔에 냈다`);
+const d0 = addGas(i, cover.v, cover.name, true);
+effect(`${sbj(i)} '${cover.name}' 카드를 잔에 내고 마셨다. 효과: 가스 ${sgn(d0)} → ${p.gas}`);
 drank = true;
 const rest = p.hand.filter((c) => c.t === "S");
-for (const c of rest) { takeCard(i, c); discard(c); await fly(i, c, "마저 마셨다"); addGas(i, c.v, `${c.name}도`); }
+if (rest.length) log(`${eunNeun(i)} 남은 술 ${rest.length}장도 이번 턴에 마저 마셔야 한다`, "sys");
+for (const c of rest) { takeCard(i, c); discard(c); await fly(i, c, `남은 '${c.name}'도 마셨다`); const d = addGas(i, c.v, `${c.name}도`, true); effect(`${sbj(i)} 남은 '${c.name}'도 마저 마셨다. 효과: 가스 ${sgn(d)} → ${p.gas}`); }
 if (human(i) && hidden.length) log(`(몰래 잔 밑에 숨김: ${hidden.map((c) => c.name).join(", ")})`, "sys");
 await sleep(500);
 await hoeSuspicion(i, hidden);
 hidden.forEach(discard);
-S.stackBack = 0; S.tell = "";
+S.stackBack = 0; S.tell = ""; S.peek = null;
 await check();
 } else log(`${nm(i)}: 마실 술이 없다 (이번 턴은 흘리기도 못 한다)`, "sys");
 if (drank && p.hand.some((c) => c.t === "J")) {
 let a;
 if (human(i)) { await coach("anju", "술을 마신 턴에만 안주 1장을 먹을 수 있어요. 안주는 가스를 낮춰요."); a = await askCard("안주 1장을 먹을 수 있어요", (c) => c.t === "J", { optional: true, skip: "안 먹기" }); }
 else a = p.hand.filter((c) => c.t === "J").reduce((a, b) => (b.v < a.v ? b : a));
-if (a) { takeCard(i, a); discard(a); await fly(i, a, "안주를 먹었다"); addGas(i, a.v, `안주 ${a.name}`); }
+if (a) { takeCard(i, a); discard(a); await fly(i, a, `안주 '${a.name}'${josa(a.name, "을", "를").slice(a.name.length)} 먹었다`); const d = addGas(i, a.v, `안주 ${a.name}`, true); effect(`${sbj(i)} '${a.name}' 안주를 먹었다. 효과: 가스 ${sgn(d)} → ${p.gas}`, d < 0 ? "gd" : ""); }
 }
 let act = null;
 if (human(i)) { if (p.hand.some(hoeOwnTurnAction)) act = await askCard("행동 카드 1장을 쓸 수 있어요", hoeOwnTurnAction, { optional: true, skip: "턴 끝내기" }); }
-else act = hoeAiAction(i);
+else { act = hoeAiAction(i); if (act) await think(i, hoeThinkAct(i, act)); }
 if (act) { takeCard(i, act); await hoeAction(i, act); }
 await check();
 p.hand.push(draw(), draw());
 while (p.hand.length > 8) {
 const c = human(i)
-? await askCard("손패가 8장을 넘었어요. 버릴 카드 1장 (술이면 마셔요)", () => true)
+? await askCard(`손패가 8장을 넘었어요. ${p.hand.length - 8}장 더 버려야 해요 (술을 버리면 그 술은 마셔요)`, () => true)
 : p.hand.filter((x) => x.t !== "S").sort((a, b) => b.v - a.v)[0] || p.hand.reduce((a, b) => (b.v < a.v ? b : a));
 takeCard(i, c); discard(c);
 if (c.t === "S") addGas(i, c.v, `버리려던 ${c.name}`);

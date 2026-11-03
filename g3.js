@@ -9,7 +9,8 @@ S = {
 def, n, selftest, tutorial, coached: new Set(), attn: lv.attn, keen: lv.keen, deck: buildDeck(def), discard: [], reshuffles: 0,
 p: [def.me, ...names].map((name) => ({ name, gas: def.start, warn: 0, hand: [], away: false, hist: [], liar: pick([0.1, 0.45, 0.85]), sus: pick([0.6, 1, 1.4]) })),
 log: [], played: [], playedNote: "", stackBack: 0, tell: "", pendingExtra: 0, turn: 0, cur: -1, loser: null, endReason: null,
-bbungTarget: null, stats: { bbung: 0, missed: 0, actions: 0, hide: 0, hidden: 0, suspect: 0, caught: 0 },
+bbungTarget: null, stats: { bbung: 0, missed: 0, actions: 0, hide: 0, hidden: 0, suspect: 0, caught: 0, joined: 0 },
+bubble: null, playedFx: "", extraFor: null, extraSrc: "", peek: null,
 };
 if (tutorial) {
 const want = def.key === "family"
@@ -56,7 +57,7 @@ const rest = [...Array(S.n).keys()].filter((k) => k !== S.loser)
 return [...rest, S.loser];
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
-// 스시고 느낌 카드: 위쪽 색면에 음식 캐릭터, 아래 회색 띠에 이름과 수치
+// 종이 카드: 크림색 테두리 안에 파스텔 그림 창, 아래에 이름과 수치
 const ART = {
 "치킨": "🍗", "삼겹살": "🥓", "잔치국수": "🍜", "갈비찜": "🍖", "전": "🥞", "흰쌀밥": "🍚", "미역국": "🥣", "만두": "🥟",
 "초코 케이크": "🍰", "아이스크림": "🍦", "젤리 폭탄": "🍬", "콜라": "🥤", "스트롱 사이다!": "🧃", "초코우유 원샷": "🥛",
@@ -70,20 +71,31 @@ const ART = {
 };
 const HUES = ["yellow", "lime", "pink", "red", "blue", "mint", "purple", "orange"];
 function hueOf(name) { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return HUES[h % HUES.length]; }
-const FACE = '<svg class="face" viewBox="0 0 40 20" aria-hidden="true"><circle cx="11" cy="7" r="2.6"/><circle cx="29" cy="7" r="2.6"/><path d="M16 11 q4 4 8 0" fill="none" stroke-width="2.2" stroke-linecap="round"/><ellipse class="blush" cx="5" cy="13" rx="3.4" ry="2"/><ellipse class="blush" cx="35" cy="13" rx="3.4" ry="2"/></svg>';
 function cardHTML(c, { cls = "", attrs = "", mini = false, proj = null } = {}) {
 const art = ART[c.name] || "🍽️";
 const v = c.t === "A" ? "" : `<span class="v">${c.v > 0 ? "+" : ""}${c.v}</span>`;
 const pj = proj == null ? "" : `<span class="proj ${proj >= DANGER ? "dg" : ""}">${c.t === "S" ? "마시면" : "먹으면"} ${proj}${proj >= DANGER ? " 위험!" : ""}</span>`;
 return `<button class="card ${c.t} hue-${hueOf(c.name)} ${mini ? "mini" : ""} ${c.fresh ? "fresh" : ""} ${cls}" ${attrs}>
-<span class="field"><span class="k">${KIND[c.t]}</span><span class="tiny" aria-hidden="true">${art}</span>
-<span class="char" aria-hidden="true"><span class="emo">${art}</span>${c.t === "A" ? "" : FACE}</span><span class="plate" aria-hidden="true"></span></span>
+<span class="field"><span class="k">${KIND[c.t]}</span><span class="char" aria-hidden="true"><span class="emo">${art}</span></span></span>
 <span class="band">${pj}<span class="n">${esc(c.name)}</span>${v}${c.desc ? `<span class="d">${esc(c.desc)}</span>` : ""}</span></button>`;
 }
 // 카드 뒷면 (상대 손패, 잔 밑에 숨긴 카드)
 function backsHTML(n, max = 8) {
 return `<span class="backs" aria-label="카드 ${n}장">${Array.from({ length: Math.min(n, max) }, () => '<i class="back"></i>').join("")}</span>`;
 }
+// 상대 손패: 카드 뒷면을 부채꼴로 겹쳐서 장수를 눈으로 셀 수 있게
+function fanHTML(n) {
+const m = Math.min(n, 10);
+const cards = Array.from({ length: m }, (_, k) => `<i class="back" style="--r:${((k - (m - 1) / 2) * (m > 6 ? 7 : 9)).toFixed(1)}deg"></i>`).join("");
+return `<span class="fan" role="img" aria-label="손패 ${n}장">${cards}</span>`;
+}
+// 자리 밑으로 살짝 삐져나온 카드 모서리 (회식판 흘리기 흔적)
+function peekHTML(k) {
+const pk = S.peek;
+if (!pk || pk.i !== k) return "";
+return `<span class="peek s${pk.seed}" aria-hidden="true">${Array.from({ length: pk.n }, () => '<i class="back"></i>').join("")}</span>`;
+}
+const SLY = ["괜히 헛기침을 한다", "엉덩이를 들썩인다", "표정이 묘하게 굳었다", "자세를 고쳐 앉는다", "식은땀이 맺혔다"];
 function gauge(g) {
 const w = Math.min(100, (g / 20) * 100);
 return `<div class="gauge ${g >= DANGER ? "dg" : g >= 13 ? "hi" : ""}" role="img" aria-label="가스 ${g}, 위험선 16"><i style="width:${w}%"></i></div>`;
@@ -101,12 +113,18 @@ return `<div class="ava ${big ? "big" : ""} ${lv}" style="--pct:${Math.min(100, 
 function warnsHTML(w) {
 return `<span class="warns" role="img" aria-label="경고 ${w}장">${[0, 1].map((k) => `<i class="${k < w ? "on" : ""}"></i>`).join("")}</span>`;
 }
+// 위험한 사람은 대놓고 알리지 않고 슬그머니 눈치만 준다
 function dangerLine(k) {
 const p = P(k);
 if (p.gas < DANGER) return "";
-if (outOfSeat(k)) return `<div class="dz safe">위험하지만 산책 중이라 뿡 면제</div>`;
-const callers = nb(k).filter((j) => !outOfSeat(j)).map((j) => (j === 0 ? "나" : nm(j)));
-return `<div class="dz">위험! ${callers.join("·")}만 뿡 가능</div>`;
+if (outOfSeat(k)) return `<div class="dz safe">산책 중이라 뿡 면제</div>`;
+return `<div class="dz sly">${SLY[(k + p.gas) % SLY.length]}…</div>`;
+}
+// 회식판 흘리기 고를 때: 안 흘린 술을 마저 마시면 가스가 얼마가 되는지 미리 보여 준다
+function drinkPreview(pr, me) {
+const rest = me.hand.filter((c) => c.t === "S" && !pr.chosen.includes(c));
+const after = me.gas + pr.cover.v + rest.reduce((a, c) => a + c.v, 0);
+return `<div class="need ${after >= DANGER ? "dg" : ""}">잔에 낸 '${esc(pr.cover.name)}' +${pr.cover.v}${rest.length ? `, 안 흘린 술 ${rest.length}장(${esc(rest.map((c) => c.name).join(", "))})도 마저 마셔요` : ", 남는 술 없음"} → 가스 ${after}${after >= DANGER ? " 위험!" : ""}</div>`;
 }
 function render() {
 setPlaying(!TUT && S && !S.over && !S.selftest);
@@ -122,16 +140,21 @@ const p = P(k);
 const pickable = pr && pr.type === "player" && pr.cands.includes(k);
 const bb = pr && pr.type === "timed" && S.bbungTarget === k;
 const side = k === 1 ? "왼쪽" : k === S.n - 1 ? "오른쪽" : "";
-return `<div class="seat ${S.cur === k ? "turn" : ""} ${p.gas >= DANGER ? "danger" : ""} ${p.away ? "out" : ""} ${pickable ? "pick" : ""}" data-seat="${k}" ${pickable ? `data-player="${k}" role="button" tabindex="0"` : ""}>
+const fidget = p.gas >= DANGER && !outOfSeat(k);
+return `<div class="seat ${S.cur === k ? "turn" : ""} ${fidget ? "fidget" : ""} ${p.away ? "out" : ""} ${pickable ? "pick" : ""}" data-seat="${k}" ${pickable ? `data-player="${k}" role="button" tabindex="0"` : ""}>
 ${S.cur === k ? '<span class="ribbon">차례</span>' : ""}
+${S.bubble && S.bubble.i === k ? `<div class="bubble" role="status">${esc(S.bubble.text)}</div>` : ""}
 ${avatarHTML(p)}
 <div class="npl"><b>${esc(p.name)}</b>${myNb.includes(k) ? `<i class="nbtag">${side ? side + " " : ""}옆</i>` : ""}</div>
 ${gauge(p.gas)}
-<div class="pips">${warnsHTML(p.warn)}<span class="handc" aria-label="손패 ${p.hand.length}장"><i class="back"></i>${p.hand.length}</span></div>
+<div class="pips">${warnsHTML(p.warn)}${isFam() ? `<span class="handc" aria-label="손패 ${p.hand.length}장"><i class="back"></i>${p.hand.length}</span>` : ""}</div>
+${isFam() ? "" : fanHTML(p.hand.length)}
 ${p.away ? `<span class="status">${S.def.away} 중</span>` : ""}
+${S.pendingExtra > 0 && S.extraFor === k ? `<span class="status need">다음 차례 음식 ${S.pendingExtra}장 더</span>` : ""}
 ${dangerLine(k)}
 ${histHTML(p, 2)}
 ${bb ? `<button class="bbung-btn" data-act="timed">뿡!</button>` : ""}
+${peekHTML(k)}
 </div>`;
 }).join("");
 const outs = S.p.filter((p) => p.away);
@@ -142,7 +165,7 @@ const me = P(0);
 let promptHTML = "";
 if (pr) {
 if (pr.type === "card") promptHTML = `<div class="q">${esc(pr.q)}</div>${pr.optional ? `<div class="row"><button class="pbtn" data-act="skip">${esc(pr.skip)}</button></div>` : ""}`;
-else if (pr.type === "cards") promptHTML = `<div class="q">${esc(pr.q)}</div><div class="row"><button class="pbtn main" data-act="confirm">${pr.chosen.length ? `${pr.chosen.length}장 흘리고 마시기` : esc(pr.skip)}</button></div>`;
+else if (pr.type === "cards") promptHTML = `<div class="q">${esc(pr.q)}</div>${pr.cover ? drinkPreview(pr, me) : ""}<div class="row"><button class="pbtn main" data-act="confirm">${pr.chosen.length ? `${pr.chosen.length}장 흘리고 마시기` : esc(pr.skip)}</button></div>`;
 else if (pr.type === "player") promptHTML = `<div class="q">${esc(pr.q)}</div><div class="muted">테이블에서 사람을 누르세요.</div>${pr.optional ? `<div class="row"><button class="pbtn" data-act="skip">안 한다</button></div>` : ""}`;
 else if (pr.type === "opts") promptHTML = `<div class="q">${esc(pr.q)}</div><div class="row">${pr.opts.map(([l, v, c], k) => `<button class="pbtn ${c || ""}" data-opt="${k}">${esc(l)}</button>`).join("")}</div>`;
 else if (pr.type === "timed") promptHTML = `<div class="q">${esc(pr.q)}</div>${pr.extra ? `<div class="tell">단서: ${esc(pr.extra)}</div>` : ""}<div class="row"><button class="pbtn main big" data-act="timed">${esc(pr.label)}</button></div><div class="timer"><i id="timerbar"></i></div>`;
@@ -160,7 +183,7 @@ const proj = "FDS".includes(c.t) && c.sp !== "elder" ? me.gas + c.v : null;
 return cardHTML(c, { cls, attrs, proj });
 }).join("");
 const played = S.played.length
-? `${S.playedNote ? `<div class="note">${esc(S.playedNote)}</div>` : ""}<div class="stack">${S.played.map((c) => cardHTML(c, { attrs: 'tabindex="-1"' })).join("")}${S.stackBack && S.cur === 0 ? `<span class="hid">${backsHTML(S.stackBack)}<span class="muted">밑에 ${S.stackBack}장 숨김</span></span>` : ""}</div>${S.tell ? `<div class="tell">${esc(S.tell)}</div>` : ""}`
+? `${S.playedNote ? `<div class="note">${esc(S.playedNote)}</div>` : ""}${S.playedFx ? `<div class="pfx">${esc(S.playedFx)}</div>` : ""}<div class="stack">${S.played.map((c) => cardHTML(c, { attrs: 'tabindex="-1"' })).join("")}${S.stackBack && S.cur === 0 ? `<span class="hid">${backsHTML(S.stackBack)}<span class="muted">밑에 ${S.stackBack}장 숨김</span></span>` : ""}</div>${S.tell ? `<div class="tell">${esc(S.tell)}</div>` : ""}`
 : `<div class="stack"></div><div class="muted">아직 낸 카드가 없어요.</div>`;
 const logHTML = S.log.slice(-60).map((l) => `<p class="${l.cls}">${esc(l.text)}</p>`).join("");
 const myCallers = nb(0).filter((j) => !outOfSeat(j)).map(nm).join("·");
@@ -218,7 +241,9 @@ modalEl.innerHTML = `<div class="modal" role="dialog" aria-modal="true"><div cla
 } else {
 modalEl.innerHTML = `<div class="modal" role="dialog" aria-modal="true"><div class="mbox">
 <h3 class="bb">${esc(m.title)}</h3>
-${m.lines.map(([k, v]) => `<div class="ln"><b>${esc(k)}</b><p>${esc(v)}</p></div>`).join("")}
+${m.sub ? `<p class="msub">${esc(m.sub)}</p>` : ""}
+${m.fold ? `<details class="why"><summary>${esc(m.fold)}</summary>${m.lines.map(([k, v]) => `<div class="ln"><b>${esc(k)}</b><p>${esc(v)}</p></div>`).join("")}</details>`
+: m.lines.map(([k, v]) => `<div class="ln"><b>${esc(k)}</b><p>${esc(v)}</p></div>`).join("")}
 <div class="row"><button class="pbtn main" data-close>계속</button></div></div></div>`;
 }
 const b = modalEl.querySelector("[data-close]"); if (b) b.focus();
@@ -227,9 +252,11 @@ modalEl.addEventListener("click", (e) => { if (e.target.closest("[data-close]"))
 function setPlaying(on) { document.body.classList.toggle("playing", !!on); }
 const RULES = {
 family: [
+["게임 목적", "음식을 먹고 마시며 옆 사람이 방구를 뀌게 유도하세요. 꼴찌 1명이 정해지면 게임이 종료됩니다."],
 ["준비", "모두 가스 10에서 시작하고 카드 6장을 받아요. 시작 플레이어부터 시계 방향으로 돌아요."],
 ["내 차례", "손에 음식이나 음료가 있으면 1장은 반드시 먹어요. 그다음 행동 카드 1장을 더 쓸 수 있고, 손패를 6장으로 채워요."],
 ["위험과 뿡!", "가스가 16 이상이면 위험 상태예요. 바로 양옆 사람만 \"뿡!\"을 외칠 수 있어요. 뿡을 맞으면 경고 1장을 받고 가스는 10으로 돌아가요."],
+["같이 뀌기", "누가 뿡을 맞는 순간, 나도 가스가 16 이상이면 그 틈에 같이 뀌어요. 혼나는 건 뿡을 맞은 사람뿐이라 나는 경고 없이 가스만 10으로 돌아가요."],
 ["못 외치면 벌칙", "위험한 사람이 있는데 아무도 안 외치면, 다음 턴이 시작될 때 양옆이 둘 다 벌칙을 받아요. 손패 1장을 무작위로 공개해서 가스를 올리는 카드면 그대로, 아니면 +1이에요."],
 ["산책", "'산책 나가기'를 쓰면 다음 내 차례까지 산책 구역에 있어요. 산책 중에는 뿡을 받지도 외치지도 않아요."],
 ["게임 끝", "경고 2장을 받은 사람이 꼴찌가 되고 바로 끝나요. 카드 더미를 세 번째로 다 쓰면 마감이에요. 나머지는 경고가 적은 순, 같으면 가스가 낮은 순으로 순위를 정해요."],
@@ -282,7 +309,7 @@ app.innerHTML = `
 <div class="pinfo">
 <span class="brand">뿡! 카드게임</span>
 <h1>${fam ? "예의를 지켜라, 뿡! 가족판" : "뿡! 회식 Edition"}</h1>
-<p class="lead">${fam ? "할머니 생신잔치에서 먹고 마시다 보면 가스가 차올라요. 옆사람이 먼저 눈치채면 \"뿡!\" 1등이 아니라 꼴찌 한 명을 가리는 파티 카드게임이에요." : "잔 밑으로 술을 몰래 흘리고, 수상하면 의심하고. 블러핑으로 술자리를 버티는 파티 카드게임이에요. 실제 술 없이 음료로 즐겨요."}</p>
+<p class="lead ${fam ? "story" : ""}">${fam ? "할머니의 생신잔치! 모두가 먹고 마시며 즐거운데...\n어? 배에 가스가 차오른다.\n큰일이다. 할머니는 예의를 중시하는데...\n에라 모르겠다. 너가 방구끼고 혼나는 동안 우리도 방구 좀 시원하게 뀌자!" : "잔 밑으로 술을 몰래 흘리고, 수상하면 의심하고. 블러핑으로 술자리를 버티는 파티 카드게임이에요. 실제 술 없이 음료로 즐겨요."}</p>
 <div class="price"><b>무료</b><span>설치 없이 웹에서 바로 · AI 상대</span></div>
 <dl class="spec">
 <dt>인원</dt><dd>3~6명</dd>
@@ -344,7 +371,7 @@ const common = [
 d: `<div class="demo-row"><span class="pill">경고 0장</span><span class="pill">경고 1장</span><span class="pill dg">경고 2장 = 꼴찌</span></div>` },
 { t: "가스는 계속 차올라요", p: `${mode === "family" ? "음식과 음료를 먹으면" : "술을 마시면"} 가스가 올라가요. 막대의 빨간 선이 16이에요. 16 이상이 되면 위험 상태예요. 위험 상태라고 바로 벌을 받는 건 아니고, 옆사람이 눈치채야 해요.`,
 d: g(mode === "family" ? 10 : 6, "시작") + g(14, "조심") + g(17, "위험! 16 이상") },
-{ t: "뿡은 바로 양옆만 외쳐요", p: "누군가 위험해지면, 그 사람의 바로 왼쪽과 오른쪽 사람만 \"뿡!\"을 외칠 수 있어요. 뿡을 맞으면 경고 1장을 받고 가스가 처음 값으로 돌아가요. 양옆이 둘 다 못 외치면 다음 턴 시작에 양옆이 벌칙을 받아요.",
+{ t: "뿡은 바로 양옆만 외쳐요", p: "누군가 위험해지면, 그 사람의 바로 왼쪽과 오른쪽 사람만 \"뿡!\"을 외칠 수 있어요. 뿡을 맞으면 경고 1장을 받고 가스가 처음 값으로 돌아가요. 양옆이 둘 다 못 외치면 다음 턴 시작에 양옆이 벌칙을 받아요." + (mode === "family" ? " 누가 뿡을 맞는 순간 나도 16 이상이면, 그 틈에 같이 뀌어서 경고를 피해요." : ""),
 d: `<div class="demo-row"><span class="pill nbp">왼쪽 옆사람: 뿡 가능</span><span class="pill dg">위험한 사람 17</span><span class="pill nbp">오른쪽 옆사람: 뿡 가능</span><span class="pill">건너편: 못 외침</span></div>` },
 ];
 const fam = [

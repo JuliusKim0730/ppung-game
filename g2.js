@@ -23,6 +23,9 @@ toastx: [`${nm(hi)} 거의 다 찼다. 나만 빼고 건배!`, "난 배불러서
 silence: ["…괜히 분위기 좀 조용하게 만들어 볼까", "다들 왜 말이 없어?"],
 laugh: [`옆에서 웃기면 ${nm(nhi)} 터지겠지?`, "내가 웃긴 얘기 하나 해 줄게"],
 steal: [`${nm(most)} 손에 뭐 맛있는 거 있나?`, "그거 나 좀 줘 봐~"],
+feed: [`${nm(hi)}, 이것도 먹어 봐! 맛있어~`, "이거 진짜 맛있는데, 누구 줄까?"],
+poke: [`${nm(nhi)} 옆구리 한번 찔러 볼까?`, "쿡! 장난 좀 쳐 볼까"],
+swap: ["내 반찬이랑 바꿔 먹자~", `${nm(most)} 거 맛있어 보이는데?`],
 grandma: ["다들 어디 갔어? 할머니한테 일러야지", "산책은 무슨, 다 들어와!"],
 }[c.sp] || ["이거나 써 볼까"]);
 }
@@ -102,6 +105,42 @@ await sleep(700);
 if (famIsFD(g)) await famPlayFD(i, g, "뺏어서 ");
 else if (["r_block", "r_join"].includes(g.sp) || depth >= 3) { discard(g); log("반응 카드라 그냥 버린다", "sys"); }
 else await famAction(i, g, depth + 1);
+} else if (c.sp === "feed") {
+// 이것도 먹어 봐: 내 손패 음식·음료를 남이 대신 먹는다
+const fd = P(i).hand.filter(famIsFD);
+const cands = [...Array(S.n).keys()].filter((k) => k !== i && !P(k).away);
+if (!fd.length || !cands.length) { effect("권할 음식이 없어서 효과 없음", "sys"); return; }
+const k = human(i) ? await askPlayer("누구에게 먹일까요?", cands) : hiOf(cands);
+const g = human(i) ? await askCard(`${nm(k)}에게 먹일 음식·음료 1장을 고르세요`, famIsFD) : fd.reduce((a, b) => (b.v > a.v ? b : a));
+takeCard(i, g); discard(g);
+const v = g.sp === "elder" ? 3 : g.v;
+if (await tryBlock(k, v, c.name)) return;
+const d = addGas(k, v, `${g.name}(권함)`, true);
+effect(`${sbj(i)} ${nm(k)}에게 '${g.name}'${josa(g.name, "을", "를").slice(g.name.length)} 먹였다. 효과: ${nm(k)} 가스 ${sgn(d)} → ${P(k).gas}`);
+if (g.sp === "chain") {
+const nx = (k + 1) % S.n;
+S.pendingExtra++; S.extraFor = nx; S.extraSrc = `${sbj(k)} 먹은 '${g.name}'`;
+log(`${eunNeun(nx)} 다음 턴 시작에 음식을 1장 더 먹어야 한다`, "sys");
+}
+} else if (c.sp === "poke") {
+const cands = nb(i).filter((k) => k !== i && !P(k).away);
+if (!cands.length) { effect("옆에 찌를 사람이 없다", "sys"); return; }
+const k = human(i) ? await askPlayer("양옆 중 누구를 찌를까요? (+2)", cands) : hiOf(cands);
+if (await tryBlock(k, 2, c.name)) return;
+const d = addGas(k, 2, c.name, true);
+effect(`${sbj(i)} ${nm(k)}의 옆구리를 콕! 효과: ${nm(k)} 가스 ${sgn(d)} → ${P(k).gas}`);
+} else if (c.sp === "swap") {
+const cands = [...Array(S.n).keys()].filter((k) => k !== i && !P(k).away && P(k).hand.length);
+if (!cands.length || !P(i).hand.length) { effect("바꿀 반찬이 없다", "sys"); return; }
+const k = human(i) ? await askPlayer("누구와 반찬을 바꿀까요? (서로 무작위 1장)", cands)
+: cands.reduce((a, b) => (P(b).hand.length > P(a).hand.length ? b : a));
+if (await tryBlock(k, 0, c.name, "손패 1장 교환")) return;
+const mine = P(i).hand.splice(Math.floor(rnd() * P(i).hand.length), 1)[0];
+const theirs = P(k).hand.splice(Math.floor(rnd() * P(k).hand.length), 1)[0];
+delete mine.fresh; delete theirs.fresh;
+P(i).hand.push(theirs); P(k).hand.push(mine);
+const show = (who, card) => (human(who) ? `'${card.name}'` : "카드 1장");
+effect(`${sbj(i)} ${nm(k)}${josa(nm(k), "과", "와").slice(nm(k).length)} 반찬을 바꿨다. ${human(i) || human(k) ? `나: ${human(i) ? show(i, theirs) : show(k, mine)} 받음` : "서로 무작위 1장씩"}`);
 }
 await sleep(400);
 }
@@ -128,8 +167,11 @@ if (by("toast") && g + 2 <= Math.min(...others) && Math.max(...others) >= 12) re
 if (by("laugh") && g <= 11 && Math.max(...nb(i).map((k) => P(k).gas)) >= 13) return by("laugh");
 if (by("silence") && g <= 11 && Math.max(...others) >= 14) return by("silence");
 if (by("steal") && g <= 11) return by("steal");
+if (by("poke") && Math.max(...nb(i).filter((k) => k !== i && !P(k).away).map((k) => P(k).gas), 0) >= 13) return by("poke");
+if (by("feed") && P(i).hand.some((c) => famIsFD(c) && c.v >= 3) && Math.max(...others) >= 12) return by("feed");
 if (by("grandma") && S.p.some((p) => p.away && p.gas >= 13)) return by("grandma");
 }
+if (by("swap") && g >= 10 && P(i).hand.filter((c) => famIsFD(c) && c.v >= 3).length >= 2) return by("swap");
 if (g >= 11) { const b = acts.find((c) => c.name === "트름"); if (b) return b; }
 return null;
 }

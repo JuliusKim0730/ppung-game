@@ -238,8 +238,8 @@ p.gas = S.def.start;
 p.hist = [];
 FX.push({ i, v: S.def.start - gas });
 S.coached.add("firstbbung");
-// 남의 뿡 타이밍에 같이 뀐 사람: 가스 조건(16 이상)이 되면 경고 없이 가스만 처음으로
-const joined = [...Array(S.n).keys()].filter((k) => k !== i && P(k).gas >= DANGER && !outOfSeat(k));
+// 가족판만: 남의 뿡 타이밍에 같이 뀐 사람: 가스 조건(16 이상)이 되면 경고 없이 가스만 처음으로
+const joined = isFam() ? [...Array(S.n).keys()].filter((k) => k !== i && P(k).gas >= DANGER && !outOfSeat(k)) : [];
 for (const k of joined) {
 const g0 = P(k).gas;
 P(k).gas = S.def.start; P(k).hist = [];

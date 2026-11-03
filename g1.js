@@ -87,10 +87,12 @@ const c = w.charCodeAt(w.length - 1);
 const has = c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 > 0;
 return w + (has ? a : b);
 }
-const sbj = (i) => josa(nm(i), "이", "가");
+const sbj = (i) => (nm(i) === "나" ? "내가" : josa(nm(i), "이", "가"));
 const eunNeun = (i) => josa(nm(i), "은", "는");
 const outOfSeat = (i) => isFam() && P(i).away;
 function nb(i) { const n = S.n; return [...new Set([(i + n - 1) % n, (i + 1) % n])]; }
+const sgn = (d) => (d >= 0 ? "+" : "") + d;
+const eul = (w) => josa(w, "을", "를");
 function log(text, cls = "") { S.log.push({ text, cls }); if (S.log.length > 160) S.log.shift(); render(); }
 function addGas(i, v, label, quiet = false) {
 const p = P(i), before = p.gas;
@@ -120,6 +122,8 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(() => requestAn
 async function fly(i, c, verb) {
 S.played = [c];
 S.playedNote = `${sbj(i)} ${verb}`;
+S.playedFx = "";
+S.bubble = null;
 if (S.selftest) return;
 render();
 const from = document.querySelector(`[data-seat="${i}"]`);
@@ -141,6 +145,16 @@ await sleep(reduced ? 500 : 900);
 el.remove();
 render();
 }
+// AI가 카드를 내기 전에 하는 혼잣말 (말풍선)
+async function think(i, text) {
+if (S.selftest || human(i) || !text) return;
+S.bubble = { i, text };
+render();
+await sleep(1500);
+if (S.bubble && S.bubble.i === i) S.bubble = null;
+}
+// 방금 나온 카드 아래에 붙는 효과 한 줄 + 기록
+function effect(text, cls = "") { S.playedFx = text; log(text, cls); }
 function runFX() {
 if (!FX.length || S.selftest) { FX = []; return; }
 for (const { i, v } of FX) {
@@ -208,7 +222,6 @@ S.bbungTarget = null;
 caller = hit ? 0 : ai ? ai.j : null;
 } else if (ai) { await sleep(700); caller = ai.j; }
 if (caller !== null) await bbung(i, caller);
-else if (p.gas >= DANGER) log(`${nm(i)}의 가스 ${p.gas}… 아무도 눈치채지 못했다. (다음 턴 시작에 양옆이 벌칙)`, "sys");
 }
 }
 function histText(p) {
@@ -225,16 +238,28 @@ p.gas = S.def.start;
 p.hist = [];
 FX.push({ i, v: S.def.start - gas });
 S.coached.add("firstbbung");
+// 남의 뿡 타이밍에 같이 뀐 사람: 가스 조건(16 이상)이 되면 경고 없이 가스만 처음으로
+const joined = [...Array(S.n).keys()].filter((k) => k !== i && P(k).gas >= DANGER && !outOfSeat(k));
+for (const k of joined) {
+const g0 = P(k).gas;
+P(k).gas = S.def.start; P(k).hist = [];
+FX.push({ i: k, v: S.def.start - g0 });
+S.stats.joined++;
+log(`${nm(k)}도 그 틈에 슬쩍 같이 뀌었다! 경고 없이 가스 ${S.def.start}`, "gd");
+}
 await sleep(1100);
 if (settings.explain || S.tutorial) {
 await showModal({
 kind: "bbung",
-title: `뿡! ${eunNeun(i)} 경고 ${p.warn}장`,
+title: `와하하! ${sbj(i)} 방구를 뀌었다!`,
+sub: `${nm(i)} 경고 ${p.warn}장${p.warn >= 2 ? ", 꼴찌!" : ""}${joined.length ? ` · ${joined.map(nm).join(", ")}도 그 틈에 같이 뀌어서 경고 없음` : ""}`,
+fold: "왜 뀌었는지 보기",
 lines: [
 ["왜?", `${nm(i)}의 가스가 ${gas}이 됐어요. 16 이상이면 위험 상태예요.`],
 ["무엇 때문에?", hist.length ? `최근 가스 변화: ${hist.join(", ")}` : "이전부터 가스가 높았어요."],
 ["누가?", `옆자리 ${sbj(caller)} 외쳤어요. 위험한 사람의 바로 양옆(${callers.map(nm).join(", ")})만 외칠 수 있어요.`],
 ["결과", `경고 ${p.warn}장${p.warn >= 2 ? "이라 꼴찌, 게임 끝!" : `. 2장이면 꼴찌예요. 가스는 ${S.def.start}으로 돌아가요.`}`],
+...(joined.length ? [["같이 뀌기", `${joined.map(nm).join(", ")}도 가스가 16 이상이었어요. 남이 뿡할 때 같이 뀌면 경고 없이 가스만 ${S.def.start}으로 돌아가요.`]] : []),
 ...(i === 0 && p.warn < 2 ? [["요령", isFam() ? "가스 13쯤부터 화장실·마사지·트름·산책으로 미리 낮추세요." : "센 술은 잔 밑으로 흘리거나, 화장실·물로 미리 낮추세요."]] : []),
 ],
 });
@@ -244,24 +269,27 @@ if (p.warn >= 2) { S.loser = i; S.endReason = "경고2"; throw END; }
 async function missedPenalty() {
 for (let i = 0; i < S.n; i++) {
 if (P(i).gas < DANGER || outOfSeat(i)) continue;
-const results = [];
+const results = [], short = [];
 for (const j of nb(i)) {
 if (outOfSeat(j)) continue;
 const h = P(j).hand;
 S.stats.missed++;
-if (!h.length) { addGas(j, 1, "놓친 벌칙"); results.push(`${nm(j)}: 손패가 없어 +1`); continue; }
+if (!h.length) { addGas(j, 1, "놓친 벌칙"); results.push(`${nm(j)}: 손패가 없어 +1`); short.push(`${nm(j)} +1`); continue; }
 const c = h.splice(Math.floor(rnd() * h.length), 1)[0];
 discard(c);
 const raises = "FDS".includes(c.t) && c.v > 0;
 log(`${eunNeun(j)} ${nm(i)}의 뿡을 놓쳤다! 손패 무작위 공개: ${c.name}`, "bb");
 const d = addGas(j, raises ? c.v : 1, raises ? `벌칙(${c.name})` : "벌칙");
 results.push(`${nm(j)}: '${c.name}' 공개 → ${raises ? "가스를 올리는 카드라 그대로" : "올리는 카드가 아니라 대신"} +${d}`);
+short.push(`${nm(j)} +${d}`);
 await sleep(600);
 }
 if (results.length && (settings.explain || S.tutorial)) {
 await showModal({
 kind: "bbung",
-title: "뿡을 놓쳤다!",
+title: "앗, 뿡을 놓쳤다!",
+sub: `${nm(i)}의 뿡을 아무도 못 잡았다. 양옆 벌칙: ${short.join(", ")}`,
+fold: "무슨 일인지 보기",
 lines: [
 ["무슨 일?", `${nm(i)}의 가스가 ${P(i).gas}(16 이상)인데 지난 턴에 아무도 "뿡!"을 외치지 않았어요.`],
 ["벌칙", `옆사람 둘 다 손패 1장을 무작위로 공개해요. ${results.join(" / ")}`],
@@ -274,20 +302,24 @@ await check();
 }
 const famIsFD = (c) => c.t === "F" || c.t === "D";
 const famOwnTurnAction = (c) => c.t === "A" && !["r_block", "r_join"].includes(c.sp) && !c.fresh;
-async function famPlayFD(i, c, verb = "먹었다") {
+async function famPlayFD(i, c, how = "") {
 discard(c);
-await fly(i, c, verb);
+await fly(i, c, `'${c.name}' 카드를 냈다`);
+const nx = (i + 1) % S.n;
 if (c.sp === "elder") {
 const cands = [...Array(S.n).keys()].filter((k) => k !== i);
 const k = human(i) ? await askPlayer("할아버지 몫을 받을 어른을 지목하세요", cands) : cands.reduce((a, b) => (P(b).gas > P(a).gas ? b : a));
-log(`${nm(i)}: "할아버지 몫이에요!" ${nm(k)}에게 넘겼다`);
-addGas(k, c.v, "할아버지 몫");
+const d = addGas(k, c.v, "할아버지 몫", true);
+effect(`${sbj(i)} '할아버지 몫' 카드를 썼다. "이건 할아버지 드려야지!" 효과: ${nm(k)} 가스 ${sgn(d)} → ${P(k).gas}`);
 } else {
-addGas(i, c.v, c.name);
+const d = addGas(i, c.v, c.name, true);
+effect(`${sbj(i)} '${c.name}' 카드로 ${how}${eul(c.name)} ${c.t === "F" ? "먹었다" : "마셨다"}. 효과: 가스 ${sgn(d)} → ${P(i).gas}${c.sp === "chain" ? `, 다음 사람 ${nm(nx)} 음식 1장 더` : ""}`, d < 0 ? "gd" : "");
 }
 if (c.sp === "chain") {
 S.pendingExtra++;
-log(`${eunNeun((i + 1) % S.n)} 다음 턴 시작에 음식을 1장 더 먹어야 한다`, "sys");
+S.extraFor = nx;
+S.extraSrc = `${nm(i)}의 '${c.name}'`;
+log(`${eunNeun(nx)} 다음 턴 시작에 음식을 1장 더 먹어야 한다 (그 턴엔 음식·음료 2장)`, "sys");
 await coach("chain", `${c.name}! 다음 사람(${nm((i + 1) % S.n)})은 자기 턴이 시작될 때 음식을 1장 더 먹어야 해요. 다음 사람 가스가 높을 때 쓰면 효과 만점.`);
 }
 await sleep(500);
@@ -315,7 +347,7 @@ for (const k of tg) {
 if (k !== i && (await tryBlock(k, v, c.name))) continue;
 addGas(k, v, c.name, true); hit.push(k);
 }
-log(`${c.name}: ${hit.map(nm).join(", ")} 가스 +${v}`);
+effect(`효과: ${hit.length ? `${hit.map(nm).join(", ")} 가스 +${v}` : "아무도 안 받았다"}`);
 if (c.sp === "toast" || c.sp === "toastx") {
 const outs = [...Array(S.n).keys()].filter((k) => P(k).away);
 if (outs.length) log(`(${outs.map(nm).join(", ")}: 산책 중이라 건배를 피했다)`, "sys");

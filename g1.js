@@ -20,6 +20,9 @@ cards: [
 ["A", "배꼽 잡고 웃는다", 0, 2, "laugh", "나와 내 양옆 +2"],
 ["A", "그거 좀 줘", 0, 2, "steal", "다른 사람 손패 1장을 무작위로 뽑아 내가 바로 쓴다"],
 ["A", "산책 나가기", 0, 3, "walk", "가스 -1, 다음 내 차례까지 산책 (뿡을 받지 않음)"],
+["A", "이것도 먹어 봐", 0, 2, "feed", "1명 지목, 내 손패의 음식·음료 1장을 그 사람이 대신 먹는다"],
+["A", "옆구리 콕", 0, 2, "poke", "내 양옆 중 1명 +2"],
+["A", "반찬 바꿔 먹기", 0, 2, "swap", "1명과 손패 1장씩 무작위로 바꾼다"],
 ["A", "나 잠깐 안 보일게", 0, 2, "r_block", "반응: 나에게 오는 행동 카드 효과 1번 무효"],
 ["A", "어! 나도 나갈게!", 0, 3, "r_join", "반응: 누가 산책 나갈 때 같이 나가고 가스 -1"],
 ["A", "할머니! 얘들 없어요!", 0, 2, "grandma", "산책 중인 사람 전원 복귀. 방금 나간 사람은 +1 (반응/내 차례)"],
@@ -324,12 +327,12 @@ await coach("chain", `${c.name}! 다음 사람(${nm((i + 1) % S.n)})은 자기 �
 }
 await sleep(500);
 }
-async function tryBlock(k, v, cardName) {
+async function tryBlock(k, v, cardName, what = null) {
 const c = findSp(k, "r_block");
 if (!c) return false;
 let use;
-if (human(k)) use = await askYesNo(`'${cardName}' 효과가 당신에게 온다 (+${v}). '나 잠깐 안 보일게'로 막을까요?`, "막는다", "그냥 받는다");
-else use = P(k).gas + v >= DANGER - 1;
+if (human(k)) use = await askYesNo(`'${cardName}' 효과가 당신에게 온다 (${what || `+${v}`}). '나 잠깐 안 보일게'로 막을까요?`, "막는다", "그냥 받는다");
+else use = what ? rnd() < 0.3 : P(k).gas + v >= DANGER - 1;
 if (!use) return false;
 takeCard(k, c); discard(c);
 log(`${nm(k)}: "나 잠깐 안 보일게!" 효과 무효`, "gd");

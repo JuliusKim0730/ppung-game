@@ -8,4 +8,4 @@
 
 빌드 과정 없는 정적 사이트입니다 (`index.html`, `app.css`, `g1.js`~`g3.js`). 주소 끝에 `#selftest`를 붙이면 AI끼리 2,400판을 돌려 규칙 엔진을 점검합니다.
 
-카드 아트워크는 `assets/ppung/{family,hoesik}/unique_cards/<ID>.png`(F01·D01·A01·S01·J01·W01 식 ASCII ID)에 있고, `cards_img.js`가 판+카드 이름을 파일로 연결합니다. 이미지를 못 불러오면 기존 종이 카드로 그립니다. 같은 이름의 고해상도 파일로 덮어쓰고 `CARD_IMG_VER`만 올리면 교체됩니다.
+카드 일러스트는 `assets/ppung/{family,hoesik}/art/<ID>.webp`(F01·D01·A01·S01·J01·W01 식 ASCII ID)에 있고, `cards_img.js`가 판+카드 이름을 파일로 연결합니다. 카드 이름·수치·효과는 이미지가 아니라 글자로 그리고, 이미지를 못 불러오면 기존 종이 카드로 그립니다. 같은 이름의 파일로 덮어쓰고 `CARD_IMG_VER`만 올리면 교체됩니다.

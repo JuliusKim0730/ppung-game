@@ -464,3 +464,39 @@ a.go { text-decoration: none; display: inline-block; }
 .demo .zone .muted { color: var(--muted); }
 .demo .gauge { background: var(--line); }
 @media (max-width: 520px) { .box-foot { display: none; } .box-cards { padding-bottom: 8%; } }
+
+/* 카드 아트워크: 이미지 윗부분(이름+일러스트)만 보여 주고, 아래 수치·효과는 글자로 크게 다시 그린다.
+   이미지를 못 불러오면 .image-card가 빠지면서 아래 종이 카드(.field/.band)가 그대로 보인다. */
+.card:not(.image-card) > .pic, .card:not(.image-card) > .ib { display: none; }
+.card.image-card { display: flex; flex-direction: column; padding: 0; min-height: 0; background: var(--band); border-radius: 12px; box-shadow: 0 6px 14px -9px rgba(60,35,20,.6); }
+.card.image-card > .field, .card.image-card > .band { display: none; }
+.card.image-card > .pic { display: block; position: relative; aspect-ratio: 201 / 158; overflow: hidden; flex: none; }
+/* 이미지 속 작은 카드 이름 위를 흰 띠로 덮고 큰 글자로 다시 쓴다 (이미지 0~50px 구간) */
+.card.image-card .hd { position: absolute; left: 3%; right: 3%; top: 2.5%; height: calc(100% * var(--hd, 48) / 158 - 2.5%); background: #fff; border-radius: 8px 8px 0 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 1px; z-index: 1; }
+.card.image-card .kc { display: none; position: absolute; top: 2px; left: 2px; font-size: 8.5px; font-weight: 700; line-height: 1; color: #fff; background: var(--band); padding: 2px 5px; border-radius: 999px; }
+.card.image-card .nm { font-weight: 800; font-size: 14px; line-height: 1.1; color: #2b211b; letter-spacing: -.04em; white-space: nowrap; }
+.card.image-card .nm.l { font-size: 12.5px; }
+.card.image-card .nm.xl { font-size: 11px; }
+.me .hand .card.image-card .kc { display: block; }
+.card.image-card .hd { justify-content: center; }
+.me .hand .card.image-card .hd { justify-content: flex-end; }
+.me .hand .card.image-card .nm { font-size: 16px; }
+.me .hand .card.image-card .nm.l { font-size: 14px; }
+.me .hand .card.image-card .nm.xl { font-size: 12px; }
+.card.mini.image-card .nm { font-size: 11px; }
+.card.mini.image-card .nm.l, .card.mini.image-card .nm.xl { font-size: 9.5px; }
+.card.mini.image-card .kc { display: none; }
+.card.image-card .art { display: block; width: 100%; height: auto; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+.card.image-card > .ib { flex: 1; display: flex; flex-direction: column; gap: 5px; padding: 0 6px 6px; }
+.card.image-card .row { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-top: -4px; }
+.card.image-card .vb { background: #fffaf0; color: var(--bink); font-weight: 800; font-size: 17px; line-height: 1; padding: 4px 9px; border-radius: 9px; box-shadow: 0 0 0 1.5px var(--bink) inset; letter-spacing: -.02em; }
+.card.image-card .vb.act { font-size: 13px; padding: 5px 7px; }
+.card.image-card .proj { margin: 0; font-size: 11.5px; padding: 2px 7px; background: #fffaf0; }
+.card.image-card .proj.dg { background: #ffd9d4; }
+.card.image-card .dd { flex: 1; background: #fffaf0; color: #33261f; border-radius: 8px; padding: 5px 6px; font-size: 12px; line-height: 1.35; font-weight: 600; letter-spacing: -.03em; word-break: keep-all; }
+.me .hand .card.image-card .dd { font-size: 13px; }
+.me .hand .card.image-card, .card.mini.image-card { min-height: 0; }
+.card.mini.image-card .dd, .card.mini.image-card .proj { display: none; }
+.card.mini.image-card .vb { font-size: 13px; padding: 3px 6px; }
+.card.mini.image-card .vb.act { font-size: 11px; }
+.card.mini.image-card > .ib { padding: 0 4px 5px; }

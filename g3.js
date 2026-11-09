@@ -75,7 +75,9 @@ function cardHTML(c, { cls = "", attrs = "", mini = false, proj = null } = {}) {
 const art = ART[c.name] || "🍽️";
 const v = c.t === "A" ? "" : `<span class="v">${c.v > 0 ? "+" : ""}${c.v}</span>`;
 const pj = proj == null ? "" : `<span class="proj ${proj >= DANGER ? "dg" : ""}">${c.t === "S" ? "마시면" : "먹으면"} ${proj}${proj >= DANGER ? " 위험!" : ""}</span>`;
-return `<button class="card ${c.t} hue-${hueOf(c.name)} ${mini ? "mini" : ""} ${c.fresh ? "fresh" : ""} ${cls}" ${attrs}>
+const img = typeof cardImageUrl === "function" ? cardImageUrl(c) : "";
+const pic = img ? `<img class="art" src="${img}" alt="${esc(c.name)}${c.t === "A" ? "" : ` ${c.v > 0 ? "+" : ""}${c.v}`}${c.desc ? `. ${esc(c.desc)}` : ""}" decoding="async" draggable="false" onerror="cardImgFail(this)">` : "";
+return `<button class="card ${c.t} hue-${hueOf(c.name)} ${img ? "image-card" : ""} ${mini ? "mini" : ""} ${c.fresh ? "fresh" : ""} ${cls}" ${img && c.desc ? `title="${esc(c.name)}: ${esc(c.desc)}" ` : ""}${attrs}>${pic}
 <span class="field"><span class="k">${KIND[c.t]}</span><span class="char" aria-hidden="true"><span class="emo">${art}</span></span></span>
 <span class="band">${pj}<span class="n">${esc(c.name)}</span>${v}${c.desc ? `<span class="d">${esc(c.desc)}</span>` : ""}</span></button>`;
 }

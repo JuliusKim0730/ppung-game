@@ -464,3 +464,12 @@ a.go { text-decoration: none; display: inline-block; }
 .demo .zone .muted { color: var(--muted); }
 .demo .gauge { background: var(--line); }
 @media (max-width: 520px) { .box-foot { display: none; } .box-cards { padding-bottom: 8%; } }
+
+/* 카드 아트워크 이미지: 이미지가 카드 전체(이름·수치·효과)를 담고 있어서 종이 카드 레이아웃은 숨긴다.
+   이미지를 못 불러오면 .image-card가 빠지면서 아래 종이 카드가 그대로 보인다. */
+.card.image-card { display: block; padding: 0; min-height: 0; height: auto; aspect-ratio: 201 / 288; border-radius: 7.5% / 5.2%; background: #fff; box-shadow: 0 6px 14px -9px rgba(60,35,20,.6); }
+.card.image-card > .art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scale(1.012); display: block; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+.card.image-card .field, .card.image-card .band > :not(.proj) { display: none; }
+.card.image-card .band { position: absolute; left: 0; right: 0; top: 44%; padding: 0 5px; display: flex; justify-content: flex-end; z-index: 2; }
+.card.image-card .proj { margin: 0; box-shadow: 0 2px 6px -2px rgba(0,0,0,.4); }
+.me .hand .card.image-card, .card.mini.image-card { min-height: 0; }

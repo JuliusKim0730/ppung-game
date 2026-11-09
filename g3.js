@@ -75,9 +75,16 @@ function cardHTML(c, { cls = "", attrs = "", mini = false, proj = null } = {}) {
 const art = ART[c.name] || "🍽️";
 const v = c.t === "A" ? "" : `<span class="v">${c.v > 0 ? "+" : ""}${c.v}</span>`;
 const pj = proj == null ? "" : `<span class="proj ${proj >= DANGER ? "dg" : ""}">${c.t === "S" ? "마시면" : "먹으면"} ${proj}${proj >= DANGER ? " 위험!" : ""}</span>`;
-const img = typeof cardImageUrl === "function" ? cardImageUrl(c) : "";
-const pic = img ? `<img class="art" src="${img}" alt="${esc(c.name)}${c.t === "A" ? "" : ` ${c.v > 0 ? "+" : ""}${c.v}`}${c.desc ? `. ${esc(c.desc)}` : ""}" decoding="async" draggable="false" onerror="cardImgFail(this)">` : "";
-return `<button class="card ${c.t} hue-${hueOf(c.name)} ${img ? "image-card" : ""} ${mini ? "mini" : ""} ${c.fresh ? "fresh" : ""} ${cls}" ${img && c.desc ? `title="${esc(c.name)}: ${esc(c.desc)}" ` : ""}${attrs}>${pic}
+const art2 = typeof cardArt === "function" ? cardArt(c) : null;
+// 그림은 이미지 윗부분(카드 이름+일러스트)만 쓰고, 수치·효과는 글자로 크게 다시 그린다
+let pic = "";
+if (art2) {
+const badge = c.t === "A" ? "행동" : `${c.v > 0 ? "+" : ""}${c.v}`;
+const rule = c.desc || (c.t === "J" ? "술 마신 턴에만 먹을 수 있다" : `가스 ${badge}`);
+const nl = [...c.name].length;
+pic = `<span class="pic"><span class="hd"><span class="kc">${KIND[c.t]}</span><span class="nm${nl > 9 ? " xl" : nl > 6 ? " l" : ""}">${esc(c.name)}</span></span><img class="art" src="${art2.url}" alt="${esc(c.name)}" decoding="async" draggable="false" onerror="cardImgFail(this)"></span><span class="ib"><span class="row"><span class="vb${c.t === "A" ? " act" : ""}">${badge}</span>${pj}</span><span class="dd">${esc(rule)}</span></span>`;
+}
+return `<button class="card ${c.t} hue-${hueOf(c.name)} ${art2 ? "image-card" : ""} ${mini ? "mini" : ""} ${c.fresh ? "fresh" : ""} ${cls}" ${art2 ? `style="--band:${art2.band};--bink:${art2.ink};--hd:${art2.hd}" ` : ""}${attrs}>${pic}
 <span class="field"><span class="k">${KIND[c.t]}</span><span class="char" aria-hidden="true"><span class="emo">${art}</span></span></span>
 <span class="band">${pj}<span class="n">${esc(c.name)}</span>${v}${c.desc ? `<span class="d">${esc(c.desc)}</span>` : ""}</span></button>`;
 }

@@ -26,14 +26,16 @@ if (tutorial) S.first = 0;
 else S.first = session.lastFirst == null ? Math.floor(rnd() * n) : (session.lastFirst + 1) % n;
 if (!selftest && !tutorial) session.lastFirst = S.first;
 }
-async function runGame() {
-let i = S.first;
-log(`${S.def.name} 시작! ${nm(i)}부터 시계 방향.`, "sys");
-if (S.tutorial) {
+async function runGame(from = null) {
+let i = from == null ? S.first : from;
+if (from != null) log(`저장된 판을 이어서 한다. ${nm(i)}의 차례부터.`, "sys");
+else log(`${S.def.name} 시작! ${nm(i)}부터 시계 방향.`, "sys");
+if (S.tutorial && from == null) {
 await coach("start", `연습 판이에요. 위쪽 네모가 상대들, 맨 아래가 내 자리예요. '옆사람' 표시가 붙은 ${nm(1)}, ${nm(S.n - 1)} 두 사람이 내가 감시할 사람이고, 저 둘도 나를 감시해요. 가스 막대의 빨간 선이 16, 위험선이에요.`);
 }
 try {
 for (;;) {
+saveGame(i);
 S.turn++; S.cur = i;
 if (S.turn > 600) { S.endReason = "마감"; throw END; }
 log(`${nm(i)}의 차례`, "tn");
@@ -48,8 +50,62 @@ if (e !== END) throw e;
 UI.prompt = null;
 if (S.loser == null) S.loser = [...Array(S.n).keys()].reduce((a, b) => (P(b).warn > P(a).warn || (P(b).warn === P(a).warn && P(b).gas > P(a).gas) ? b : a));
 S.over = true;
+if (!S.selftest && !S.tutorial) clearSave();
 render();
 }
+// 이어하기: 매 차례가 시작될 때 판 전체를 저장한다. 차례 도중에 나가면 그 차례 처음부터 다시 한다.
+const SAVE_KEY = "ppung-save1";
+function saveGame(i) {
+if (!S || S.selftest || S.tutorial) return;
+try {
+const snap = { ...S, def: S.def.key, coached: [...S.coached], bubble: null, peek: null, bbungTarget: null };
+localStorage.setItem(SAVE_KEY, JSON.stringify({ v: 1, at: Date.now(), next: i, S: snap }));
+} catch (e) {}
+}
+function loadSave() {
+try {
+const d = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
+if (!d || d.v !== 1 || !d.S || !Array.isArray(d.S.p) || !["family", "hoesik"].includes(d.S.def)) return null;
+return d;
+} catch (e) { return null; }
+}
+function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} }
+function resumeGame() {
+const d = loadSave();
+if (!d) return false;
+S = { ...d.S, def: d.S.def === "family" ? FAMILY : HOESIK, coached: new Set(d.S.coached || []), over: false };
+settings.mode = S.def.key; saveSettings();
+document.documentElement.dataset.mode = S.def.key;
+const ids = [...S.deck, ...S.discard, ...S.p.flatMap((p) => p.hand)].map((c) => c.id || 0);
+cardSeq = Math.max(cardSeq, ...ids);
+runGame(d.next);
+return true;
+}
+function agoText(t) {
+const m = Math.round((Date.now() - t) / 60000);
+if (m < 1) return "방금 전";
+if (m < 60) return `${m}분 전`;
+if (m < 60 * 24) return `${Math.round(m / 60)}시간 전`;
+return `${Math.round(m / 1440)}일 전`;
+}
+function openStartChoice() {
+const d = loadSave();
+const lvName = { easy: "둔함", normal: "보통", hard: "예리함" }[settings.level] || "보통";
+const fam = settings.mode === "family";
+let saved = '<small>저장된 판이 없어요</small>';
+if (d) {
+const me = d.S.p[0];
+saved = `<small>${d.S.def === "family" ? "가족판" : "회식판"} · ${d.S.n}명 · ${d.S.turn + 1}번째 차례 · 내 가스 ${me.gas} · 경고 ${me.warn}장</small><small class="when">${agoText(d.at)} 저장</small>`;
+}
+modalEl.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="sc-h" data-choice><div class="mbox startbox">
+<h3 id="sc-h">게임 시작</h3>
+<button class="choice ${d ? "" : "main"}" data-act="new"><b>새 게임</b><small>${fam ? "가족판" : "회식판"} · ${settings.n}명 · 상대 눈치 ${lvName}</small>${d ? '<small class="when">새로 시작하면 저장된 판은 지워져요</small>' : ""}</button>
+<button class="choice ${d ? "main" : ""}" data-act="resume" ${d ? "" : "disabled"}><b>이어하기</b>${saved}</button>
+<div class="row"><button class="pbtn" data-act="closechoice">닫기</button></div>
+</div></div>`;
+const b = modalEl.querySelector(d ? '[data-act="resume"]' : '[data-act="new"]'); if (b) b.focus();
+}
+function closeStartChoice() { if (modalEl.querySelector("[data-choice]")) modalEl.innerHTML = ""; }
 function ranking() {
 const handGas = (p) => p.hand.filter((c) => "FDS".includes(c.t)).reduce((a, c) => a + c.v, 0);
 const rest = [...Array(S.n).keys()].filter((k) => k !== S.loser)
@@ -139,7 +195,7 @@ return `<div class="need ${after >= DANGER ? "dg" : ""}">잔에 낸 '${esc(pr.co
 function render() {
 setPlaying(!TUT && S && !S.over && !S.selftest);
 if (TUT) return renderSlides();
-if (!S) return renderIntro();
+if (!S) return renderPage();
 if (S.selftest) return;
 if (S.over) return renderEnd();
 const pr = UI.prompt;
@@ -292,19 +348,13 @@ ${small ? "" : `<span class="box-cards">${cards}</span><span class="box-foot"><s
 }
 function renderIntro() {
 setPlaying(false);
+if (location.hash) history.replaceState(null, "", location.pathname + location.search);
 document.documentElement.dataset.mode = settings.mode;
 const fam = settings.mode === "family";
 const def = fam ? FAMILY : HOESIK;
 const seg = (key, vals) => `<div class="seg" role="group">${vals.map(([v, l]) => `<button data-set="${key}" data-val="${v}" aria-pressed="${settings[key] == v}">${l}</button>`).join("")}</div>`;
 const ver = (m, title, desc) => `<button class="ver" data-set="mode" data-val="${m}" aria-pressed="${settings.mode === m}">${boxArt(m, true)}<span><b>${title}</b><small>${desc}</small></span></button>`;
-const about = slidesFor(settings.mode).slice(0, 3).map((s, k) => `<article class="feat"><span class="num">0${k + 1}</span><div><h3>${esc(s.t)}</h3><p>${esc(s.p)}</p></div><div class="demo">${s.d}</div></article>`).join("");
-const steps = RULES[settings.mode].map(([h, p], k) => `<li><span class="sn">${k + 1}</span><div><b>${esc(h)}</b><p>${esc(p)}</p></div></li>`).join("");
 const kinds = [...new Set(def.cards.map((c) => c[0]))];
-const gallery = kinds.map((t) => {
-const cs = def.cards.filter((c) => c[0] === t);
-return `<div class="kind"><h3>${KIND[t]} <span class="muted">${cs.length}종 · ${cs.reduce((a, c) => a + c[3], 0)}장</span></h3>
-<div class="cgrid">${cs.map(([ct, name, v, n, , desc]) => `<div class="citem">${cardHTML({ t: ct, name, v, desc: desc || "" }, { attrs: 'tabindex="-1"' })}<span class="cnt">×${n}</span></div>`).join("")}</div></div>`;
-}).join("");
 app.innerHTML = `
 <section class="intro">
 <nav class="crumb" aria-label="위치"><span>홈</span><span>파티게임</span><span>카드게임</span></nav>
@@ -334,24 +384,84 @@ app.innerHTML = `
 <div class="ogrp two"><div><span class="olabel">상대 눈치</span>${seg("level", [["easy", "둔함"], ["normal", "보통"], ["hard", "예리함"]])}</div>
 <div><span class="olabel">진행 속도</span>${seg("speed", SPEEDS)}</div></div>
 </div>
-<div class="cta">
-<button class="go ghost" data-jump="rules">규칙 먼저 읽기</button>
-<button class="go" data-act="start">바로 플레이</button>
-</div>
+<button class="go wide" data-act="start">게임 시작</button>
 <button class="tutlink" data-act="tutorial">처음이라면 튜토리얼로 시작하기 <span aria-hidden="true">›</span></button>
 </div>
 </div>
-<nav class="ptabs" aria-label="상세 메뉴">
-<button data-jump="about">게임 소개</button><button data-jump="rules">게임 규칙</button><button data-jump="cards">카드 구성</button><button data-act="contact">만든이</button>
+<nav class="quick" aria-label="더 보기">
+<button data-act="rulebook"><b>룰북</b><small>${fam ? "가족판" : "회식판"} 규칙 ${RULES[settings.mode].length}단계</small></button>
+<button data-act="cards"><b>카드 구성</b><small>${kinds.length}종류 · ${deckCount(def)}장</small></button>
+<button data-act="tutorial"><b>튜토리얼</b><small>설명 보고 연습 판</small></button>
+<button data-act="contact"><b>만든이</b><small>Contact</small></button>
 </nav>
-<section class="psec" id="about"><h2>게임 소개</h2>${about}</section>
-<section class="psec" id="rules"><h2>게임 규칙 <span class="muted">${fam ? "가족판" : "회식판"} · v1.1</span></h2>
-<ol class="steps">${steps}</ol>
-<div class="cta solo"><button class="go" data-act="start">${fam ? "잔치 시작" : "회식 시작"}</button><button class="go ghost" data-act="tutorial">튜토리얼로 연습하기</button></div>
-</section>
-<section class="psec" id="cards"><h2>카드 구성 <span class="muted">${fam ? "가족판" : "회식판"} · 총 ${deckCount(def)}장</span></h2>${gallery}</section>
+${brochureHTML(settings.mode)}
 <footer class="credit"><span class="fl">뿡! 카드게임</span><span>만든이 <b>${esc(CREATOR.name)}</b> · <button class="linkbtn" data-act="contact">Contact</button></span><span>규칙 v1.1 · AI 상대와 브라우저에서 바로 즐기는 싱글 플레이</span></footer>
 </section>`;
+}
+// 게임 소개서: 시작 화면 아래로 이어지는 소개 글. (투고용 소개서가 완성되면 이 내용을 바꾼다)
+function brochureHTML(mode) {
+const fam = mode === "family";
+const feats = slidesFor(mode).slice(0, 3).map((s, k) => `<article class="feat"><span class="num">0${k + 1}</span><div><h3>${esc(s.t)}</h3><p>${esc(s.p)}</p></div><div class="demo">${s.d}</div></article>`).join("");
+const row = (k, f, h) => `<tr><th scope="row">${k}</th><td>${f}</td><td>${h}</td></tr>`;
+return `<section class="psec brochure" id="about">
+<header class="bhead"><span class="tag">게임 소개서</span><h2>꼴찌 한 명만 가리는 눈치 카드게임</h2>
+<p>먹고 마실수록 배 속 가스가 차올라요. 넘친 걸 바로 옆사람이 먼저 눈치채면 "뿡!" 1등은 없고, 경고 2장을 먼저 받은 한 사람이 꼴찌예요.</p></header>
+<div class="bpart"><h3>기획 의도</h3>
+<ul class="plain">
+<li>모두가 1등을 노리는 게임 대신, 꼴찌 한 명만 가리는 게임을 만들고 싶었어요. 진 사람은 확실히 웃음거리가 되지만 중간에 탈락해서 구경만 하는 사람은 없어요.</li>
+<li>가스는 숫자로 다 보이지만 "뿡!"을 외칠 수 있는 건 바로 양옆뿐이에요. 내 옆자리를 계속 지켜봐야 해서, 남의 차례에도 손을 놓을 수 없어요.</li>
+<li>같은 뼈대로 두 자리를 만들었어요. 가족판은 정직하게 먹고 버티는 판, 회식판은 잔 밑으로 카드를 흘리고 의심하는 블러핑 판이에요.</li>
+</ul></div>
+<div class="bpart"><h3>이런 재미가 있어요</h3>${feats}</div>
+<div class="bpart"><h3>두 가지 판</h3>
+<div class="tblwrap"><table class="cmp"><thead><tr><th></th><th>가족판 · 할머니 생신잔치</th><th>회식판 · 술자리를 버텨라</th></tr></thead><tbody>
+${row("자리", "할머니 생신잔치", "회식 자리")}
+${row("시작 가스", FAMILY.start, HOESIK.start)}
+${row("내 차례", "음식·음료 1장을 먹고, 행동 카드 1장", "술 1장을 잔에 내고, 최대 2장을 몰래 흘리기")}
+${row("핵심 재미", "옆사람 가스 올리기, 산책으로 피하기, 같이 뀌기", "흘리기와 의심, 들키면 숨긴 술 전부")}
+${row("구성", `카드 ${deckCount(FAMILY)}장`, `카드 ${deckCount(HOESIK)}장`)}
+${row("연령", "전연령", "성인 분위기 · 음료로 대체")}
+</tbody></table></div></div>
+<div class="cta solo"><button class="go" data-act="start">게임 시작</button><button class="go ghost" data-act="rulebook">룰북 보기</button></div>
+</section>`;
+}
+function subHead(title, sub) {
+const seg = `<div class="seg modeseg" role="group" aria-label="판 고르기">${[["family", "가족판"], ["hoesik", "회식판"]].map(([v, l]) => `<button data-set="mode" data-val="${v}" aria-pressed="${settings.mode === v}">${l}</button>`).join("")}</div>`;
+return `<nav class="crumb" aria-label="위치"><button class="linkbtn" data-act="menu">홈</button><span>${title}</span></nav>
+<div class="subhead"><h2>${title} <span class="muted">${sub}</span></h2>${seg}</div>`;
+}
+function renderRulebook() {
+setPlaying(false);
+if (location.hash !== "#rulebook") history.replaceState(null, "", "#rulebook");
+document.documentElement.dataset.mode = settings.mode;
+const fam = settings.mode === "family";
+const steps = RULES[settings.mode].map(([h, p], k) => `<li><span class="sn">${k + 1}</span><div><b>${esc(h)}</b><p>${esc(p)}</p></div></li>`).join("");
+app.innerHTML = `<section class="subpage">
+${subHead("룰북", `${fam ? "가족판" : "회식판"} · v1.1`)}
+<ol class="steps">${steps}</ol>
+<div class="cta solo"><button class="go" data-act="start">게임 시작</button><button class="go ghost" data-act="tutorial">튜토리얼로 연습하기</button><button class="go ghost" data-act="menu">처음 화면</button></div>
+</section>`;
+}
+function renderCards() {
+setPlaying(false);
+if (location.hash !== "#cards") history.replaceState(null, "", "#cards");
+document.documentElement.dataset.mode = settings.mode;
+const def = settings.mode === "family" ? FAMILY : HOESIK;
+const kinds = [...new Set(def.cards.map((c) => c[0]))];
+const gallery = kinds.map((t) => {
+const cs = def.cards.filter((c) => c[0] === t);
+return `<div class="kind"><h3>${KIND[t]} <span class="muted">${cs.length}종 · ${cs.reduce((a, c) => a + c[3], 0)}장</span></h3>
+<div class="cgrid">${cs.map(([ct, name, v, n, , desc]) => `<div class="citem">${cardHTML({ t: ct, name, v, desc: desc || "" }, { attrs: 'tabindex="-1"' })}<span class="cnt">×${n}</span></div>`).join("")}</div></div>`;
+}).join("");
+app.innerHTML = `<section class="subpage">
+${subHead("카드 구성", `${settings.mode === "family" ? "가족판" : "회식판"} · 총 ${deckCount(def)}장`)}
+${gallery}
+<div class="cta solo"><button class="go" data-act="start">게임 시작</button><button class="go ghost" data-act="menu">처음 화면</button></div>
+</section>`;
+}
+function renderPage() {
+const h = location.hash;
+if (h === "#rulebook") renderRulebook(); else if (h === "#cards") renderCards(); else if (h === "#contact") renderContact(); else renderIntro();
 }
 const CREATOR = { name: "Julius", email: "kia1026@naver.com", site: "https://juliuskim-gamedesign.vercel.app/" };
 function renderContact() {
@@ -434,7 +544,7 @@ app.innerHTML = `
 </div>
 </section>`;
 }
-function stopGame() { if (UI.prompt && UI.prompt.timer) clearTimeout(UI.prompt.timer); UI.prompt = null; UI.modal = null; renderModal(); S = null; }
+function stopGame() { if (UI.prompt && UI.prompt.timer) clearTimeout(UI.prompt.timer); UI.prompt = null; UI.modal = null; renderModal(); S = null; document.querySelectorAll(".flyer, .splash").forEach((el) => el.remove()); }
 function onAct(e) {
 const t = e.target.closest("[data-act],[data-card],[data-player],[data-opt],[data-set],[data-jump]");
 if (!t) return;
@@ -442,15 +552,20 @@ if (t.dataset.jump) { const el = document.getElementById(t.dataset.jump); if (el
 if (t.dataset.set) {
 const k = t.dataset.set, v = t.dataset.val;
 settings[k] = k === "n" || k === "speed" ? Number(v) : v;
-saveSettings(); const y = window.scrollY; renderIntro(); window.scrollTo(0, y); return;
+saveSettings(); const y = window.scrollY; renderPage(); window.scrollTo(0, y); return;
 }
 const act = t.dataset.act;
-if (act === "start" || act === "again") { stopGame(); TUT = null; newGame(); render(); runGame(); return; }
-if (act === "tutorial") { TUT = { mode: settings.mode, step: 0 }; render(); return; }
+if (act === "start") { openStartChoice(); return; }
+if (act === "closechoice") { closeStartChoice(); return; }
+if (act === "new" || act === "again") { closeStartChoice(); stopGame(); TUT = null; newGame(); render(); window.scrollTo(0, 0); runGame(); return; }
+if (act === "resume") { closeStartChoice(); stopGame(); TUT = null; if (resumeGame()) { render(); window.scrollTo(0, 0); } else renderPage(); return; }
+if (act === "rulebook") { renderRulebook(); window.scrollTo(0, 0); return; }
+if (act === "cards") { renderCards(); window.scrollTo(0, 0); return; }
+if (act === "tutorial") { closeStartChoice(); TUT = { mode: settings.mode, step: 0 }; render(); return; }
 if (act === "tnext") { TUT.step++; render(); return; }
 if (act === "tprev") { TUT.step--; render(); return; }
 if (act === "tplay") { TUT = null; newGame({ tutorial: true }); render(); runGame(); return; }
-if (act === "menu" || act === "quit") { stopGame(); TUT = null; if (location.hash === "#contact") history.replaceState(null, "", location.pathname + location.search); renderIntro(); return; }
+if (act === "menu" || act === "quit") { stopGame(); TUT = null; renderIntro(); window.scrollTo(0, 0); return; }
 if (act === "contact") { renderContact(); window.scrollTo(0, 0); return; }
 if (act === "speed") { const k = SPEEDS.findIndex(([v]) => v === settings.speed); settings.speed = SPEEDS[(k + 1) % SPEEDS.length][0]; saveSettings(); render(); return; }
 if (act === "explain") { settings.explain = !settings.explain; saveSettings(); render(); return; }
@@ -476,11 +591,18 @@ app.addEventListener("click", onAct);
 // 헤더 메뉴: 판이 진행 중이면 그만할지 묻고 나서 이동
 document.getElementById("head").addEventListener("click", (e) => {
 if (!e.target.closest("[data-act]")) return;
-if (S && !S.over && !confirm("진행 중인 판을 그만할까요?")) return;
+if (S && !S.over && !S.tutorial && !confirm("진행 중인 판을 나갈까요? 이번 차례 처음부터 '이어하기'로 돌아올 수 있어요.")) return;
+if (S && S.tutorial && !S.over && !confirm("연습 판을 그만할까요?")) return;
 stopGame(); TUT = null;
-if (location.hash === "#contact") history.replaceState(null, "", location.pathname + location.search);
 onAct(e); window.scrollTo(0, 0);
 });
+modalEl.addEventListener("click", (e) => {
+const box = modalEl.querySelector("[data-choice]");
+if (!box) return;
+if (e.target === box) { closeStartChoice(); return; }
+if (e.target.closest("[data-act]")) onAct(e);
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeStartChoice(); });
 app.addEventListener("keydown", (e) => {
 if ((e.key === "Enter" || e.key === " ") && e.target.dataset && e.target.dataset.player != null) { e.preventDefault(); e.target.click(); }
 });
@@ -500,4 +622,5 @@ window.__selftest = out;
 S = null;
 app.innerHTML = `<pre>${esc(JSON.stringify(out, null, 1))}</pre>`;
 }
-if (location.hash === "#selftest") selftest(); else if (location.hash === "#contact") renderContact(); else render();
+window.addEventListener("hashchange", () => { if (!S && !TUT && location.hash !== "#selftest") { renderPage(); window.scrollTo(0, 0); } });
+if (location.hash === "#selftest") selftest(); else if (["#contact", "#rulebook", "#cards"].includes(location.hash)) renderPage(); else render();
